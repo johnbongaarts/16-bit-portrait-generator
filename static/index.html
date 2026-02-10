@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>16-Bit Portrait Generator — Test UI</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --accent: #e94560;
+    --text: #eee;
+    --text-dim: #8892b0;
+    --border: #2a2a4a;
+    --success: #4ade80;
+    --error: #f87171;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--bg2);
+    border-bottom: 2px solid var(--accent);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  header .badge {
+    background: var(--accent);
+    color: white;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .container {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 0;
+    min-height: calc(100vh - 58px);
+  }
+
+  .sidebar {
+    background: var(--bg2);
+    padding: 20px;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+  }
+
+  .results {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-content: start;
+  }
+
+  .section {
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .upload-area:hover, .upload-area.dragover {
+    border-color: var(--accent);
+    background: rgba(233, 69, 96, 0.05);
+  }
+
+  .upload-area p { font-size: 13px; color: var(--text-dim); margin-top: 8px; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 12px; }
+
+  .btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg3);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+
+  .btn:hover { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+    font-weight: 600;
+  }
+
+  .btn.primary:hover { background: #d63452; }
+
+  .source-preview {
+    margin-top: 12px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bg);
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .source-preview img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .source-preview .placeholder {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .control label {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .control select, .control input[type="range"], .control input[type="number"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+
+  .control select { width: 120px; }
+  .control input[type="range"] { width: 100px; }
+  .control input[type="number"] { width: 60px; text-align: center; }
+
+  .control .value {
+    font-size: 11px;
+    color: var(--accent);
+    min-width: 32px;
+    text-align: right;
+  }
+
+  .control input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+  }
+
+  .result-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .result-card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .result-card h3 .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-dim);
+  }
+
+  .result-card h3 .dot.active { background: var(--success); }
+  .result-card h3 .dot.processing { background: var(--accent); animation: pulse 1s infinite; }
+
+  @keyframes pulse { 50% { opacity: 0.3; } }
+
+  .canvas-wrap {
+    background: var(--bg);
+    border-radius: 6px;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .canvas-wrap canvas {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .canvas-wrap .spinner {
+    position: absolute;
+    display: none;
+  }
+
+  .canvas-wrap .spinner.show {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .spinner-ring {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .meta {
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+  }
+
+  .meta .label { color: var(--text-dim); }
+  .meta .val { color: var(--text); }
+
+  .palette-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    margin-top: 6px;
+  }
+
+  .palette-swatches .swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .download-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 6px 20px;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 20px;
+  }
+
+  .status-bar .indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .status-bar .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  @media (max-width: 900px) {
+    .container { grid-template-columns: 1fr; }
+    .results { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>16-Bit Portrait Generator</h1>
+  <span class="badge">Test UI</span>
+</header>
+
+<div class="container">
+  <div class="sidebar">
+    <!-- Upload -->
+    <div class="section">
+      <div class="section-title">Source Image</div>
+      <div class="upload-area" id="dropZone">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p>Drop a photo or click to upload</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btnUpload">Upload Photo</button>
+        <button class="btn" id="btnCamera">Use Camera</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" hidden>
+      <div class="source-preview" id="sourcePreview">
+        <span class="placeholder">No image loaded</span>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="section">
+      <div class="section-title">Settings</div>
+
+      <div class="control">
+        <label>Output Size</label>
+        <select id="outputSize">
+          <option value="32">32 &times; 32</option>
+          <option value="48">48 &times; 48</option>
+          <option value="64" selected>64 &times; 64</option>
+          <option value="96">96 &times; 96</option>
+          <option value="128">128 &times; 128</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label>Colors</label>
+        <select id="paletteColors">
+          <option value="8">8</option>
+          <option value="16" selected>16</option>
+          <option value="24">24</option>
+          <option value="32">32</option>
+          <option value="64">64</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label>Palette</label>
+        <select id="paletteName">
+          <option value="">Auto (derived)</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label>Dither</label>
+        <select id="dither">
+          <option value="none" selected>None</option>
+          <option value="bayer2x2">Bayer 2&times;2</option>
+          <option value="bayer4x4">Bayer 4&times;4</option>
+          <option value="floyd-steinberg">Floyd-Steinberg</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label>SNES Snap</label>
+        <input type="checkbox" id="snesSnap" checked>
+      </div>
+
+      <div class="control">
+        <label>Remove BG</label>
+        <input type="checkbox" id="removeBg">
+      </div>
+
+      <div class="control" id="bgThresholdControl" style="display:none">
+        <label>BG Threshold</label>
+        <input type="range" id="bgThreshold" min="0" max="1" step="0.05" value="0.5">
+        <span class="value" id="bgThresholdVal">0.5</span>
+      </div>
+
+      <div class="control">
+        <label>Scale</label>
+        <select id="scale">
+          <option value="4">4&times;</option>
+          <option value="8" selected>8&times;</option>
+          <option value="12">12&times;</option>
+          <option value="16">16&times;</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- Actions -->
+    <div class="section">
+      <button class="btn primary" id="btnGenerate" style="width:100%" disabled>
+        Generate (Server)
+      </button>
+      <div class="download-row">
+        <button class="btn" id="btnDownloadBrowser" disabled>Download Browser</button>
+        <button class="btn" id="btnDownloadServer" disabled>Download Server</button>
+      </div>
+      <div style="margin-top:8px">
+        <button class="btn" id="btnDownloadBoth" style="width:100%" disabled>Download Both</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="results">
+    <!-- Browser Result -->
+    <div class="result-card">
+      <h3><span class="dot" id="browserDot"></span> Browser Pipeline</h3>
+      <div class="canvas-wrap">
+        <canvas id="browserCanvas" width="512" height="512"></canvas>
+        <div class="spinner" id="browserSpinner">
+          <div class="spinner-ring"></div>
+          <span style="font-size:11px;color:var(--text-dim)">Processing...</span>
+        </div>
+      </div>
+      <div class="meta" id="browserMeta">
+        <span class="label">Processing:</span><span class="val" id="browserTime">—</span>
+        <span class="label">Colors:</span><span class="val" id="browserColorCount">—</span>
+        <span class="label">Palette:</span><span class="val"><div class="palette-swatches" id="browserSwatches"></div></span>
+      </div>
+    </div>
+
+    <!-- Server Result -->
+    <div class="result-card">
+      <h3><span class="dot" id="serverDot"></span> Server Pipeline</h3>
+      <div class="canvas-wrap">
+        <canvas id="serverCanvas" width="512" height="512"></canvas>
+        <div class="spinner" id="serverSpinner">
+          <div class="spinner-ring"></div>
+          <span style="font-size:11px;color:var(--text-dim)">Generating...</span>
+        </div>
+      </div>
+      <div class="meta" id="serverMeta">
+        <span class="label">Processing:</span><span class="val" id="serverTime">—</span>
+        <span class="label">Colors:</span><span class="val" id="serverColorCount">—</span>
+        <span class="label">Palette:</span><span class="val"><div class="palette-swatches" id="serverSwatches"></div></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="indicator">
+    <span class="dot" style="background:var(--success)"></span>
+    <span>Algorithmic pipeline (no generative AI)</span>
+  </div>
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/vision_bundle.mjs" type="module"></script>
+<script type="module">
+
+// ============================================================
+// Browser-side Pixel Portrait Pipeline
+// ============================================================
+
+class PixelPortrait {
+  constructor() {
+    this.faceLandmarker = null;
+    this.ready = false;
+  }
+
+  async init() {
+    try {
+      const { FaceLandmarker, FilesetResolver } = await import(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14'
+      );
+
+      const filesetResolver = await FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+      );
+
+      this.faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+          delegate: 'GPU',
+        },
+        runningMode: 'IMAGE',
+        numFaces: 1,
+      });
+
+      this.ready = true;
+      console.log('PixelPortrait: MediaPipe FaceLandmarker ready');
+    } catch (err) {
+      console.error('PixelPortrait: Failed to init MediaPipe:', err);
+      this.ready = false;
+    }
+  }
+
+  async process(imageSource, options = {}) {
+    const {
+      outputSize = 64,
+      paletteColors = 16,
+      snesSnap = true,
+      dither = 'none',
+      removeBg = false,
+      bgThreshold = 0.5,
+    } = options;
+
+    const t0 = performance.now();
+
+    // Load image into canvas
+    const img = await this._loadImage(imageSource);
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = img.width;
+    srcCanvas.height = img.height;
+    const srcCtx = srcCanvas.getContext('2d');
+    srcCtx.drawImage(img, 0, 0);
+
+    // 1. Face detection
+    let landmarks = null;
+    let bbox = null;
+    if (this.faceLandmarker) {
+      const result = this.faceLandmarker.detect(srcCanvas);
+      if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+        landmarks = result.faceLandmarks[0];
+        bbox = this._getBoundingBox(landmarks, img.width, img.height);
+      }
+    }
+
+    if (!bbox) {
+      throw new Error('No face detected');
+    }
+
+    // 2. Crop & align
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = 256;
+    cropCanvas.height = 256;
+    const cropCtx = cropCanvas.getContext('2d');
+
+    // Eye positions for alignment
+    const eyeL = landmarks[33];
+    const eyeR = landmarks[263];
+    const eyeLx = eyeL.x * img.width;
+    const eyeLy = eyeL.y * img.height;
+    const eyeRx = eyeR.x * img.width;
+    const eyeRy = eyeR.y * img.height;
+    const angle = Math.atan2(eyeRy - eyeLy, eyeRx - eyeLx);
+
+    const cx = (bbox.x + bbox.w / 2);
+    const cy = (bbox.y + bbox.h / 2);
+
+    cropCtx.save();
+    cropCtx.translate(128, 128);
+    cropCtx.rotate(-angle);
+    cropCtx.drawImage(
+      srcCanvas,
+      bbox.x, bbox.y, bbox.w, bbox.h,
+      -128, -128, 256, 256
+    );
+    cropCtx.restore();
+
+    // 3. Pre-process: blur + contrast + saturation boost
+    let imageData = cropCtx.getImageData(0, 0, 256, 256);
+    imageData = this._gaussianBlur(imageData, 1);
+    imageData = this._adjustContrast(imageData, 1.10);
+    imageData = this._adjustSaturation(imageData, 1.15);
+    cropCtx.putImageData(imageData, 0, 0);
+
+    // 4. Downscale to output size
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = outputSize;
+    outCanvas.height = outputSize;
+    const outCtx = outCanvas.getContext('2d');
+    outCtx.imageSmoothingEnabled = false;
+    outCtx.drawImage(cropCanvas, 0, 0, outputSize, outputSize);
+
+    // 4b. Background removal (optional, before quantization)
+    if (removeBg) {
+      let bgData = outCtx.getImageData(0, 0, outputSize, outputSize);
+      bgData = this._removeBackground(bgData, landmarks, bbox, img.width, img.height, outputSize, bgThreshold);
+      outCtx.putImageData(bgData, 0, 0);
+    }
+
+    // 5. Color quantization (simple k-means in JS)
+    let outData = outCtx.getImageData(0, 0, outputSize, outputSize);
+    const { quantized, palette } = this._quantize(outData, paletteColors);
+
+    // Apply SNES snap
+    const finalPalette = snesSnap
+      ? palette.map(c => c.map(v => Math.round(v / 8) * 8))
+      : palette;
+
+    // Remap pixels to snapped palette
+    for (let i = 0; i < quantized.data.length; i += 4) {
+      const r = quantized.data[i], g = quantized.data[i+1], b = quantized.data[i+2];
+      // Find nearest in original palette, then use snapped version
+      let bestIdx = 0, bestDist = Infinity;
+      for (let j = 0; j < palette.length; j++) {
+        const dr = r - palette[j][0], dg = g - palette[j][1], db = b - palette[j][2];
+        const d = dr*dr + dg*dg + db*db;
+        if (d < bestDist) { bestDist = d; bestIdx = j; }
+      }
+      quantized.data[i] = Math.min(248, Math.max(0, finalPalette[bestIdx][0]));
+      quantized.data[i+1] = Math.min(248, Math.max(0, finalPalette[bestIdx][1]));
+      quantized.data[i+2] = Math.min(248, Math.max(0, finalPalette[bestIdx][2]));
+    }
+
+    outCtx.putImageData(quantized, 0, 0);
+
+    // 6. Post-process: eye highlights + orphan cleanup
+    let finalData = outCtx.getImageData(0, 0, outputSize, outputSize);
+    finalData = this._injectEyeHighlights(finalData, landmarks, bbox, outputSize, finalPalette);
+    finalData = this._cleanupOrphans(finalData, outputSize);
+    outCtx.putImageData(finalData, 0, 0);
+
+    const elapsed = performance.now() - t0;
+
+    return {
+      canvas: outCanvas,
+      palette: finalPalette,
+      processingMs: Math.round(elapsed),
+      outputSize,
+    };
+  }
+
+  _loadImage(source) {
+    return new Promise((resolve, reject) => {
+      if (source instanceof HTMLImageElement) { resolve(source); return; }
+      if (source instanceof HTMLCanvasElement) {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.src = source.toDataURL();
+        return;
+      }
+      // File or Blob
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      if (source instanceof File || source instanceof Blob) {
+        img.src = URL.createObjectURL(source);
+      } else if (typeof source === 'string') {
+        img.src = source;
+      } else {
+        reject(new Error('Unknown source type'));
+      }
+    });
+  }
+
+  _getBoundingBox(landmarks, w, h) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const lm of landmarks) {
+      const x = lm.x * w, y = lm.y * h;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    // Expand by 35%
+    const bw = maxX - minX, bh = maxY - minY;
+    const padX = bw * 0.35, padY = bh * 0.35;
+    return {
+      x: Math.max(0, minX - padX),
+      y: Math.max(0, minY - padY),
+      w: Math.min(w, maxX + padX) - Math.max(0, minX - padX),
+      h: Math.min(h, maxY + padY) - Math.max(0, minY - padY),
+    };
+  }
+
+  _gaussianBlur(imageData, sigma) {
+    // Simple 3x3 box blur approximation
+    const w = imageData.width, h = imageData.height;
+    const src = new Uint8ClampedArray(imageData.data);
+    const dst = imageData.data;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        for (let c = 0; c < 3; c++) {
+          let sum = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              sum += src[((y+dy)*w + (x+dx))*4 + c];
+            }
+          }
+          dst[(y*w + x)*4 + c] = sum / 9;
+        }
+      }
+    }
+    return imageData;
+  }
+
+  _adjustContrast(imageData, factor) {
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      d[i]   = Math.min(255, Math.max(0, ((d[i] - 128) * factor) + 128));
+      d[i+1] = Math.min(255, Math.max(0, ((d[i+1] - 128) * factor) + 128));
+      d[i+2] = Math.min(255, Math.max(0, ((d[i+2] - 128) * factor) + 128));
+    }
+    return imageData;
+  }
+
+  _adjustSaturation(imageData, factor) {
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i+1], b = d[i+2];
+      const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      d[i]   = Math.min(255, Math.max(0, gray + (r - gray) * factor));
+      d[i+1] = Math.min(255, Math.max(0, gray + (g - gray) * factor));
+      d[i+2] = Math.min(255, Math.max(0, gray + (b - gray) * factor));
+    }
+    return imageData;
+  }
+
+  _quantize(imageData, nColors) {
+    const w = imageData.width, h = imageData.height;
+    const pixels = [];
+    for (let i = 0; i < imageData.data.length; i += 4) {
+      pixels.push([imageData.data[i], imageData.data[i+1], imageData.data[i+2]]);
+    }
+
+    // Simple k-means
+    // Initialize centroids with k-means++ style
+    const centroids = [pixels[Math.floor(Math.random() * pixels.length)].slice()];
+    for (let k = 1; k < nColors; k++) {
+      let maxDist = -1, bestPixel = pixels[0];
+      for (const p of pixels) {
+        let minD = Infinity;
+        for (const c of centroids) {
+          const d = (p[0]-c[0])**2 + (p[1]-c[1])**2 + (p[2]-c[2])**2;
+          if (d < minD) minD = d;
+        }
+        if (minD > maxDist) { maxDist = minD; bestPixel = p; }
+      }
+      centroids.push(bestPixel.slice());
+    }
+
+    // Run k-means iterations
+    const labels = new Int32Array(pixels.length);
+    for (let iter = 0; iter < 10; iter++) {
+      // Assign
+      for (let i = 0; i < pixels.length; i++) {
+        let bestD = Infinity, bestK = 0;
+        for (let k = 0; k < centroids.length; k++) {
+          const dr = pixels[i][0] - centroids[k][0];
+          const dg = pixels[i][1] - centroids[k][1];
+          const db = pixels[i][2] - centroids[k][2];
+          const d = dr*dr + dg*dg + db*db;
+          if (d < bestD) { bestD = d; bestK = k; }
+        }
+        labels[i] = bestK;
+      }
+      // Update centroids
+      const sums = Array.from({length: nColors}, () => [0, 0, 0, 0]); // r,g,b,count
+      for (let i = 0; i < pixels.length; i++) {
+        const k = labels[i];
+        sums[k][0] += pixels[i][0];
+        sums[k][1] += pixels[i][1];
+        sums[k][2] += pixels[i][2];
+        sums[k][3]++;
+      }
+      for (let k = 0; k < nColors; k++) {
+        if (sums[k][3] > 0) {
+          centroids[k][0] = sums[k][0] / sums[k][3];
+          centroids[k][1] = sums[k][1] / sums[k][3];
+          centroids[k][2] = sums[k][2] / sums[k][3];
+        }
+      }
+    }
+
+    // Map pixels to centroids
+    const result = new ImageData(w, h);
+    for (let i = 0; i < pixels.length; i++) {
+      const k = labels[i];
+      result.data[i*4]   = Math.round(centroids[k][0]);
+      result.data[i*4+1] = Math.round(centroids[k][1]);
+      result.data[i*4+2] = Math.round(centroids[k][2]);
+      result.data[i*4+3] = 255;
+    }
+
+    const palette = centroids.map(c => c.map(v => Math.round(v)));
+    return { quantized: result, palette };
+  }
+
+  _injectEyeHighlights(imageData, landmarks, bbox, outputSize, palette) {
+    if (!landmarks || !palette.length) return imageData;
+
+    // Find brightest color
+    let brightest = palette[0], brightLum = 0;
+    for (const c of palette) {
+      const lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      if (lum > brightLum) { brightLum = lum; brightest = c; }
+    }
+
+    const d = imageData.data;
+    const w = outputSize;
+
+    for (const eyeIdx of [33, 263]) {
+      const lm = landmarks[eyeIdx];
+      // Map from image coords to crop coords to output coords
+      const relX = (lm.x * (bbox.w + bbox.x * 2 / bbox.w) - bbox.x) / bbox.w;
+      const relY = (lm.y * (bbox.h + bbox.y * 2 / bbox.h) - bbox.y) / bbox.h;
+      const px = Math.round(Math.max(0, Math.min(w - 1,
+        ((lm.x * w * 4) - bbox.x) / bbox.w * outputSize / 4
+      )));
+      const py = Math.round(Math.max(0, Math.min(w - 1,
+        ((lm.y * w * 4) - bbox.y) / bbox.h * outputSize / 4
+      )));
+
+      // Check for existing bright pixel
+      let hasBright = false;
+      for (let dy = -1; dy <= 1 && !hasBright; dy++) {
+        for (let dx = -1; dx <= 1 && !hasBright; dx++) {
+          const nx = px + dx, ny = py + dy;
+          if (nx >= 0 && nx < w && ny >= 0 && ny < w) {
+            const idx = (ny * w + nx) * 4;
+            const lum = (0.2126 * d[idx] + 0.7152 * d[idx+1] + 0.0722 * d[idx+2]) / 255;
+            if (lum > 0.7) hasBright = true;
+          }
+        }
+      }
+
+      if (!hasBright && px >= 0 && px < w && py >= 0 && py < w) {
+        const idx = (py * w + px) * 4;
+        d[idx] = brightest[0];
+        d[idx+1] = brightest[1];
+        d[idx+2] = brightest[2];
+      }
+    }
+
+    return imageData;
+  }
+
+  _removeBackground(imageData, landmarks, bbox, imgW, imgH, outputSize, threshold) {
+    const w = imageData.width;
+    const d = imageData.data;
+
+    const eyeL = landmarks[33];
+    const eyeR = landmarks[263];
+    const mouth = landmarks[13];
+
+    const mapX = (lm) => ((lm.x * imgW - bbox.x) / bbox.w) * outputSize;
+    const mapY = (lm) => ((lm.y * imgH - bbox.y) / bbox.h) * outputSize;
+
+    const elX = mapX(eyeL), elY = mapY(eyeL);
+    const erX = mapX(eyeR), erY = mapY(eyeR);
+    const mY = mapY(mouth);
+
+    const cx = (elX + erX) / 2;
+    const cy = (elY + mY) / 2;
+    const eyeDist = Math.abs(erX - elX);
+
+    const scaleFactor = 0.6 + threshold * 0.6;
+    const rx = eyeDist * scaleFactor;
+    const ry = rx * 1.3;
+    const feather = 1.15;
+
+    for (let y = 0; y < outputSize; y++) {
+      for (let x = 0; x < outputSize; x++) {
+        const dx = (x - cx) / rx;
+        const dy = (y - cy) / ry;
+        const dist = dx * dx + dy * dy;
+
+        if (dist > 1.0) {
+          const idx = (y * w + x) * 4;
+          if (dist > feather * feather) {
+            d[idx] = 0;
+            d[idx + 1] = 0;
+            d[idx + 2] = 0;
+          } else {
+            const t = (Math.sqrt(dist) - 1.0) / (feather - 1.0);
+            d[idx]     = Math.round(d[idx] * (1 - t));
+            d[idx + 1] = Math.round(d[idx + 1] * (1 - t));
+            d[idx + 2] = Math.round(d[idx + 2] * (1 - t));
+          }
+        }
+      }
+    }
+
+    return imageData;
+  }
+
+  _cleanupOrphans(imageData, size) {
+    const d = imageData.data;
+    const w = size;
+    const result = new Uint8ClampedArray(d);
+
+    for (let y = 1; y < w - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const ci = (y * w + x) * 4;
+        const cr = d[ci], cg = d[ci+1], cb = d[ci+2];
+
+        // Cardinal neighbors
+        const ti = ((y-1)*w + x)*4, bi = ((y+1)*w + x)*4;
+        const li = (y*w + (x-1))*4, ri = (y*w + (x+1))*4;
+
+        const tr = d[ti], tg = d[ti+1], tb = d[ti+2];
+
+        // All 4 same?
+        if (
+          tr === d[bi] && tg === d[bi+1] && tb === d[bi+2] &&
+          tr === d[li] && tg === d[li+1] && tb === d[li+2] &&
+          tr === d[ri] && tg === d[ri+1] && tb === d[ri+2]
+        ) {
+          // Current differs?
+          if (cr !== tr || cg !== tg || cb !== tb) {
+            result[ci] = tr;
+            result[ci+1] = tg;
+            result[ci+2] = tb;
+          }
+        }
+      }
+    }
+
+    imageData.data.set(result);
+    return imageData;
+  }
+}
+
+
+// ============================================================
+// UI Controller
+// ============================================================
+
+const portrait = new PixelPortrait();
+
+// DOM refs
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const btnUpload = document.getElementById('btnUpload');
+const btnCamera = document.getElementById('btnCamera');
+const sourcePreview = document.getElementById('sourcePreview');
+const btnGenerate = document.getElementById('btnGenerate');
+const btnDownloadBrowser = document.getElementById('btnDownloadBrowser');
+const btnDownloadServer = document.getElementById('btnDownloadServer');
+const btnDownloadBoth = document.getElementById('btnDownloadBoth');
+const browserCanvas = document.getElementById('browserCanvas');
+const serverCanvas = document.getElementById('serverCanvas');
+const browserDot = document.getElementById('browserDot');
+const serverDot = document.getElementById('serverDot');
+const browserSpinner = document.getElementById('browserSpinner');
+const serverSpinner = document.getElementById('serverSpinner');
+
+let currentFile = null;
+let browserResult = null;
+let serverResult = null;
+
+// Init
+portrait.init().then(() => {
+  console.log('Browser pipeline ready');
+});
+
+// Load palettes
+fetch('/api/palettes')
+  .then(r => r.json())
+  .then(data => {
+    const select = document.getElementById('paletteName');
+    for (const p of data.palettes) {
+      const opt = document.createElement('option');
+      opt.value = p.slug;
+      opt.textContent = `${p.name} (${p.colors})`;
+      select.appendChild(opt);
+    }
+  })
+  .catch(() => {});
+
+// Upload handlers
+btnUpload.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('click', () => fileInput.click());
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFile(fileInput.files[0]);
+});
+
+// Camera
+btnCamera.addEventListener('click', async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.play();
+    await new Promise(r => video.onloadedmetadata = r);
+    await new Promise(r => setTimeout(r, 500)); // Let camera adjust
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    stream.getTracks().forEach(t => t.stop());
+
+    canvas.toBlob(blob => {
+      handleFile(new File([blob], 'camera.jpg', { type: 'image/jpeg' }));
+    }, 'image/jpeg', 0.9);
+  } catch (err) {
+    alert('Camera access denied: ' + err.message);
+  }
+});
+
+// Debounced re-render: waits for rapid changes to settle before re-running
+let _rerunTimer = null;
+function scheduleRerun() {
+  if (!currentFile) return;
+  clearTimeout(_rerunTimer);
+  _rerunTimer = setTimeout(() => runBrowserPipeline(currentFile), 80);
+}
+
+// Remove BG toggle — show/hide threshold slider + live re-render
+const removeBgCheckbox = document.getElementById('removeBg');
+const bgThresholdControl = document.getElementById('bgThresholdControl');
+const bgThresholdSlider = document.getElementById('bgThreshold');
+const bgThresholdVal = document.getElementById('bgThresholdVal');
+
+removeBgCheckbox.addEventListener('change', () => {
+  bgThresholdControl.style.display = removeBgCheckbox.checked ? 'flex' : 'none';
+  scheduleRerun();
+});
+
+bgThresholdSlider.addEventListener('input', () => {
+  bgThresholdVal.textContent = bgThresholdSlider.value;
+  scheduleRerun();
+});
+
+// All settings → live re-render on any change
+for (const id of ['outputSize', 'paletteColors', 'paletteName', 'dither', 'snesSnap', 'scale']) {
+  const el = document.getElementById(id);
+  el.addEventListener('change', scheduleRerun);
+  el.addEventListener('input', scheduleRerun);
+}
+
+async function handleFile(file) {
+  currentFile = file;
+
+  // Show preview
+  const url = URL.createObjectURL(file);
+  sourcePreview.innerHTML = `<img src="${url}" alt="Source">`;
+  btnGenerate.disabled = false;
+
+  // Run browser pipeline immediately
+  await runBrowserPipeline(file);
+}
+
+function getSettings() {
+  return {
+    outputSize: parseInt(document.getElementById('outputSize').value),
+    paletteColors: parseInt(document.getElementById('paletteColors').value),
+    paletteName: document.getElementById('paletteName').value,
+    dither: document.getElementById('dither').value,
+    snesSnap: document.getElementById('snesSnap').checked,
+    removeBg: removeBgCheckbox.checked,
+    bgThreshold: parseFloat(bgThresholdSlider.value),
+    scale: parseInt(document.getElementById('scale').value),
+  };
+}
+
+async function runBrowserPipeline(file) {
+  browserDot.classList.add('processing');
+  browserSpinner.classList.add('show');
+
+  try {
+    const settings = getSettings();
+    const result = await portrait.process(file, {
+      outputSize: settings.outputSize,
+      paletteColors: settings.paletteColors,
+      snesSnap: settings.snesSnap,
+      dither: settings.dither,
+      removeBg: settings.removeBg,
+      bgThreshold: settings.bgThreshold,
+    });
+
+    // Draw to display canvas (upscaled)
+    const displaySize = settings.outputSize * settings.scale;
+    browserCanvas.width = displaySize;
+    browserCanvas.height = displaySize;
+    const ctx = browserCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(result.canvas, 0, 0, displaySize, displaySize);
+
+    // Update meta
+    document.getElementById('browserTime').textContent = `${result.processingMs}ms`;
+    document.getElementById('browserColorCount').textContent = result.palette.length;
+
+    // Swatches
+    const swatches = document.getElementById('browserSwatches');
+    swatches.innerHTML = '';
+    for (const c of result.palette) {
+      const s = document.createElement('div');
+      s.className = 'swatch';
+      s.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+      swatches.appendChild(s);
+    }
+
+    browserDot.className = 'dot active';
+    browserResult = browserCanvas;
+    btnDownloadBrowser.disabled = false;
+    btnDownloadBoth.disabled = !serverResult;
+  } catch (err) {
+    console.error('Browser pipeline error:', err);
+    document.getElementById('browserTime').textContent = `Error: ${err.message}`;
+    browserDot.className = 'dot';
+  }
+
+  browserSpinner.classList.remove('show');
+}
+
+// Server generation
+btnGenerate.addEventListener('click', async () => {
+  if (!currentFile) return;
+
+  serverDot.className = 'dot processing';
+  serverSpinner.classList.add('show');
+  btnGenerate.disabled = true;
+
+  const settings = getSettings();
+  const formData = new FormData();
+  formData.append('image', currentFile);
+  formData.append('output_size', settings.outputSize);
+  formData.append('palette_colors', settings.paletteColors);
+  if (settings.paletteName) formData.append('palette_name', settings.paletteName);
+  formData.append('dither', settings.dither);
+  formData.append('snes_snap', settings.snesSnap);
+  formData.append('remove_bg', settings.removeBg);
+  formData.append('bg_threshold', settings.bgThreshold);
+  formData.append('scale', settings.scale);
+
+  try {
+    const response = await fetch('/api/generate', { method: 'POST', body: formData });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail?.message || err.message || 'Server error');
+    }
+
+    const blob = await response.blob();
+    const img = new Image();
+    img.src = URL.createObjectURL(blob);
+    await new Promise(r => img.onload = r);
+
+    serverCanvas.width = img.width;
+    serverCanvas.height = img.height;
+    const ctx = serverCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0);
+
+    // Parse headers
+    const timeMs = response.headers.get('X-Portrait-Processing-Ms') || '?';
+    const paletteHex = response.headers.get('X-Portrait-Palette') || '';
+
+    document.getElementById('serverTime').textContent = `${timeMs}ms`;
+
+    // Count unique colors from palette header
+    const colors = paletteHex.split(',').filter(Boolean);
+    document.getElementById('serverColorCount').textContent = colors.length;
+
+    // Swatches
+    const swatches = document.getElementById('serverSwatches');
+    swatches.innerHTML = '';
+    for (const hex of colors) {
+      const s = document.createElement('div');
+      s.className = 'swatch';
+      s.style.background = hex;
+      swatches.appendChild(s);
+    }
+
+    serverDot.className = 'dot active';
+    serverResult = serverCanvas;
+    btnDownloadServer.disabled = false;
+    btnDownloadBoth.disabled = !browserResult;
+  } catch (err) {
+    console.error('Server generation error:', err);
+    document.getElementById('serverTime').textContent = `Error: ${err.message}`;
+    serverDot.className = 'dot';
+  }
+
+  serverSpinner.classList.remove('show');
+  btnGenerate.disabled = false;
+});
+
+// Downloads
+function downloadCanvas(canvas, filename) {
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+btnDownloadBrowser.addEventListener('click', () => {
+  if (browserResult) downloadCanvas(browserResult, 'portrait-browser.png');
+});
+
+btnDownloadServer.addEventListener('click', () => {
+  if (serverResult) downloadCanvas(serverResult, 'portrait-server.png');
+});
+
+btnDownloadBoth.addEventListener('click', () => {
+  if (browserResult) downloadCanvas(browserResult, 'portrait-browser.png');
+  if (serverResult) setTimeout(() => downloadCanvas(serverResult, 'portrait-server.png'), 100);
+});
+
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+version: "3.8"
+services:
+  portrait-generator:
+    build: .
+    ports:
+      - "8100:8000"
+    environment:
+      - MAX_CONCURRENT_REQUESTS=2
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
