@@ -626,7 +626,10 @@
 
     <!-- Download -->
     <div class="section">
-      <button class="btn primary" id="btnDownload" style="width:100%" disabled>Download PNG</button>
+      <div class="download-row">
+        <button class="btn primary" id="btnDownload" style="flex:1" disabled>Download PNG</button>
+        <button class="btn" id="btnDownloadAll" style="flex:1" disabled>All Sizes</button>
+      </div>
     </div>
   </div>
 
@@ -1242,6 +1245,7 @@ const dropZone = document.getElementById('dropZone');
 const sourcePreview = document.getElementById('sourcePreview');
 const btnUpload = document.getElementById('btnUpload');
 const btnDownload = document.getElementById('btnDownload');
+const btnDownloadAll = document.getElementById('btnDownloadAll');
 const browserCanvas = document.getElementById('browserCanvas');
 const browserDot = document.getElementById('browserDot');
 const browserSpinner = document.getElementById('browserSpinner');
@@ -1415,6 +1419,7 @@ async function runBrowserPipeline(file) {
     browserDot.className = 'dot active';
     browserResult = browserCanvas;
     btnDownload.disabled = false;
+    btnDownloadAll.disabled = false;
   } catch (err) {
     console.error('Browser pipeline error:', err);
     document.getElementById('browserTime').textContent = `Error: ${err.message}`;
@@ -1424,14 +1429,46 @@ async function runBrowserPipeline(file) {
   browserSpinner.classList.remove('show');
 }
 
-// Download
+// Download (current scale)
 btnDownload.addEventListener('click', () => {
   if (browserResult) {
     const link = document.createElement('a');
-    link.download = 'portrait.png';
+    const s = getSettings();
+    link.download = `portrait-${s.outputSize}px-${s.scale}x.png`;
     link.href = browserResult.toDataURL('image/png');
     link.click();
   }
+});
+
+// Download all sizes
+btnDownloadAll.addEventListener('click', () => {
+  if (!browserResult) return;
+  const outputSize = getSettings().outputSize;
+
+  // Extract raw pixel art at outputSize resolution from the display canvas
+  const rawCanvas = document.createElement('canvas');
+  rawCanvas.width = outputSize;
+  rawCanvas.height = outputSize;
+  const rawCtx = rawCanvas.getContext('2d');
+  rawCtx.imageSmoothingEnabled = false;
+  rawCtx.drawImage(browserCanvas, 0, 0, outputSize, outputSize);
+
+  const scales = [4, 8, 12, 16];
+  scales.forEach((scale, i) => {
+    setTimeout(() => {
+      const size = outputSize * scale;
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(rawCanvas, 0, 0, size, size);
+      const link = document.createElement('a');
+      link.download = `portrait-${outputSize}px-${scale}x.png`;
+      link.href = c.toDataURL('image/png');
+      link.click();
+    }, i * 300); // stagger downloads so browser doesn't block them
+  });
 });
 
 
