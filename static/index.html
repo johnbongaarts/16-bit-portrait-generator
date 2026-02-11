@@ -321,7 +321,7 @@
     color: var(--text-dim);
   }
 
-  .brush-toolbar.show { display: flex; }
+  .brush-toolbar.show { display: flex; grid-column: 1 / -1; }
 
   .brush-toolbar .size-btns {
     display: flex;
@@ -513,24 +513,23 @@
     </div>
   </div>
 
-  <div class="brush-toolbar" id="brushToolbar">
-    <span>Brush:</span>
-    <div class="size-btns">
-      <button class="size-btn active" data-size="1">1</button>
-      <button class="size-btn" data-size="2">2</button>
-      <button class="size-btn" data-size="3">3</button>
-      <button class="size-btn" data-size="4">4</button>
-    </div>
-    <span style="margin-left:auto">
-      <kbd>1</kbd>–<kbd>4</kbd> size
-      &nbsp;
-      <kbd>Esc</kbd> deselect
-      &nbsp;
-      Right-click: fill
-    </span>
-  </div>
-
   <div class="results">
+    <div class="brush-toolbar" id="brushToolbar">
+      <span>Brush:</span>
+      <div class="size-btns">
+        <button class="size-btn active" data-size="1">1</button>
+        <button class="size-btn" data-size="2">2</button>
+        <button class="size-btn" data-size="3">3</button>
+        <button class="size-btn" data-size="4">4</button>
+      </div>
+      <span style="margin-left:auto">
+        <kbd>1</kbd>–<kbd>4</kbd> size
+        &nbsp;
+        <kbd>Esc</kbd> deselect
+        &nbsp;
+        Right-click: fill
+      </span>
+    </div>
     <!-- Browser Result -->
     <div class="result-card">
       <h3><span class="dot" id="browserDot"></span> Browser Pipeline</h3>
