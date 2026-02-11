@@ -861,47 +861,94 @@ class PixelPortrait {
 
   _removeBackground(imageData, landmarks, bbox, imgW, imgH, outputSize, threshold) {
     const w = imageData.width;
+    const h = outputSize;
     const d = imageData.data;
 
+    // 1. Convert to grayscale for edge detection
+    const gray = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      gray[i] = 0.299 * d[i*4] + 0.587 * d[i*4+1] + 0.114 * d[i*4+2];
+    }
+
+    // 2. Sobel gradient magnitude
+    const grad = new Float32Array(w * h);
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const tl = gray[(y-1)*w+(x-1)], tc = gray[(y-1)*w+x], tr = gray[(y-1)*w+(x+1)];
+        const ml = gray[y*w+(x-1)],                            mr = gray[y*w+(x+1)];
+        const bl = gray[(y+1)*w+(x-1)], bc = gray[(y+1)*w+x], br = gray[(y+1)*w+(x+1)];
+        const gx = -tl + tr - 2*ml + 2*mr - bl + br;
+        const gy = -tl - 2*tc - tr + bl + 2*bc + br;
+        grad[y*w+x] = Math.sqrt(gx*gx + gy*gy);
+      }
+    }
+    // Border pixels get max gradient so flood fill can start but won't leak through corners
+    for (let x = 0; x < w; x++) { grad[x] = 0; grad[(h-1)*w+x] = 0; }
+    for (let y = 0; y < h; y++) { grad[y*w] = 0; grad[y*w+(w-1)] = 0; }
+
+    // 3. Face ellipse — protected foreground zone
     const eyeL = landmarks[33];
     const eyeR = landmarks[263];
     const mouth = landmarks[13];
-
     const mapX = (lm) => ((lm.x * imgW - bbox.x) / bbox.w) * outputSize;
     const mapY = (lm) => ((lm.y * imgH - bbox.y) / bbox.h) * outputSize;
-
     const elX = mapX(eyeL), elY = mapY(eyeL);
     const erX = mapX(eyeR), erY = mapY(eyeR);
     const mY = mapY(mouth);
-
     const cx = (elX + erX) / 2;
     const cy = (elY + mY) / 2;
     const eyeDist = Math.abs(erX - elX);
+    const prx = eyeDist * 0.55;
+    const pry = prx * 1.3;
 
-    const scaleFactor = 0.6 + threshold * 0.6;
-    const rx = eyeDist * scaleFactor;
-    const ry = rx * 1.3;
-    const feather = 1.15;
+    const protect = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const ex = (x - cx) / prx;
+        const ey = (y - cy) / pry;
+        if (ex*ex + ey*ey < 1.0) protect[y*w+x] = 1;
+      }
+    }
 
-    for (let y = 0; y < outputSize; y++) {
-      for (let x = 0; x < outputSize; x++) {
-        const dx = (x - cx) / rx;
-        const dy = (y - cy) / ry;
-        const dist = dx * dx + dy * dy;
+    // 4. Edge threshold: threshold=0 aggressive (high cutoff), threshold=1 conservative (low cutoff)
+    const edgeCutoff = 20 + (1.0 - threshold) * 60;
 
-        if (dist > 1.0) {
-          const idx = (y * w + x) * 4;
-          if (dist > feather * feather) {
-            d[idx] = 0;
-            d[idx + 1] = 0;
-            d[idx + 2] = 0;
-          } else {
-            const t = (Math.sqrt(dist) - 1.0) / (feather - 1.0);
-            d[idx]     = Math.round(d[idx] * (1 - t));
-            d[idx + 1] = Math.round(d[idx + 1] * (1 - t));
-            d[idx + 2] = Math.round(d[idx + 2] * (1 - t));
-          }
+    // 5. BFS flood fill from all border pixels
+    const bg = new Uint8Array(w * h); // 1 = background
+    const queue = [];
+    for (let x = 0; x < w; x++) {
+      if (!protect[x])           { bg[x] = 1; queue.push(x); }
+      if (!protect[(h-1)*w+x])   { bg[(h-1)*w+x] = 1; queue.push((h-1)*w+x); }
+    }
+    for (let y = 1; y < h - 1; y++) {
+      if (!protect[y*w])         { bg[y*w] = 1; queue.push(y*w); }
+      if (!protect[y*w+(w-1)])   { bg[y*w+(w-1)] = 1; queue.push(y*w+(w-1)); }
+    }
+
+    let qi = 0;
+    while (qi < queue.length) {
+      const idx = queue[qi++];
+      const px = idx % w, py = (idx - px) / w;
+      const neighbors = [];
+      if (px > 0)     neighbors.push(idx - 1);
+      if (px < w - 1) neighbors.push(idx + 1);
+      if (py > 0)     neighbors.push(idx - w);
+      if (py < h - 1) neighbors.push(idx + w);
+      for (const ni of neighbors) {
+        if (bg[ni] || protect[ni]) continue;
+        if (grad[ni] < edgeCutoff) {
+          bg[ni] = 1;
+          queue.push(ni);
         }
+      }
+    }
+
+    // 6. Replace background pixels with black
+    for (let i = 0; i < w * h; i++) {
+      if (bg[i]) {
+        d[i*4] = 0;
+        d[i*4+1] = 0;
+        d[i*4+2] = 0;
       }
     }
 
