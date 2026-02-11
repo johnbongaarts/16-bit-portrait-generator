@@ -53,7 +53,7 @@
 
   .container {
     display: grid;
-    grid-template-columns: 280px 1fr 260px;
+    grid-template-columns: 280px 1fr auto auto;
     gap: 0;
     min-height: calc(100vh - 58px);
   }
@@ -69,19 +69,77 @@
     padding: 20px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: start;
-    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .retouch-panel {
+  /* Shared collapsible rail styles */
+  .rail-panel {
     background: var(--bg2);
-    padding: 16px;
     border-left: 1px solid var(--border);
     overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    width: 260px;
+    transition: width 0.15s ease;
+  }
+
+  .rail-panel .rail-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+
+  .rail-panel .rail-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .rail-panel .rail-chevron {
+    transition: transform 0.2s;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .rail-panel .rail-body {
+    padding: 0 16px 16px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+  }
+
+  /* Collapsed state: narrow vertical strip with rotated label */
+  .rail-panel.collapsed {
+    width: 36px;
+    overflow: hidden;
+  }
+
+  .rail-panel.collapsed .rail-header {
+    padding: 12px 0;
+    justify-content: center;
+  }
+
+  .rail-panel.collapsed .rail-title {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    gap: 6px;
+  }
+
+  .rail-panel.collapsed .rail-chevron {
+    transform: rotate(-90deg);
+  }
+
+  .rail-panel.collapsed .rail-body {
+    display: none;
   }
 
   .section {
@@ -161,6 +219,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
   }
 
   .source-preview img {
@@ -172,6 +231,41 @@
   .source-preview .placeholder {
     color: var(--text-dim);
     font-size: 12px;
+  }
+
+  .source-preview .crop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .crop-controls {
+    margin-top: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .crop-controls.visible {
+    display: flex;
+  }
+
+  .crop-controls .control label {
+    font-size: 11px;
+  }
+
+  .crop-controls .control .value {
+    font-size: 11px;
+    color: var(--text);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .crop-controls .btn-row {
+    margin-top: 2px;
   }
 
   .control {
@@ -218,49 +312,129 @@
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 16px;
     width: 100%;
-    max-width: 640px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
 
-  .result-card h3 {
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 12px;
+  .portrait-toolbar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
   }
 
-  .result-card h3 .dot {
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  .toolbar-left .dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--text-dim);
+    flex-shrink: 0;
   }
 
-  .result-card h3 .dot.active { background: var(--success); }
-  .result-card h3 .dot.processing { background: var(--accent); animation: pulse 1s infinite; }
+  .toolbar-left .dot.active { background: var(--success); }
+  .toolbar-left .dot.processing { background: var(--accent); animation: pulse 1s infinite; }
+
+  .toolbar-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .meta-inline .label { color: var(--text-dim); }
+  .meta-inline .val { color: var(--text); margin-left: 4px; }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .zoom-btn {
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    padding: 0;
+  }
+
+  .zoom-btn:hover { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); }
+
+  .zoom-btn.text {
+    width: auto;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .zoom-slider {
+    width: 80px;
+    accent-color: var(--accent);
+    height: 4px;
+  }
+
+  .zoom-pct {
+    font-size: 11px;
+    color: var(--text);
+    min-width: 36px;
+    text-align: center;
+  }
+
+  .zoom-invert-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    margin-left: 4px;
+  }
+
+  .zoom-invert-label input {
+    accent-color: var(--accent);
+    width: 12px;
+    height: 12px;
+  }
 
   @keyframes pulse { 50% { opacity: 0.3; } }
 
   .canvas-wrap {
     background: var(--bg);
-    border-radius: 6px;
-    aspect-ratio: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+    overflow: auto;
     position: relative;
+    flex: 1;
+    min-height: 0;
   }
 
   .canvas-wrap canvas {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
-    max-width: 100%;
-    max-height: 100%;
+    display: block;
   }
 
   .canvas-wrap canvas.brush-active {
@@ -269,7 +443,11 @@
 
   .canvas-wrap .spinner {
     position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: none;
+    z-index: 20;
   }
 
   .canvas-wrap .spinner.show {
@@ -290,16 +468,10 @@
 
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .meta {
-    margin-top: 12px;
-    font-size: 11px;
-    color: var(--text-dim);
-    display: flex;
-    gap: 16px;
+  .meta-sep {
+    color: var(--border);
+    margin: 0 2px;
   }
-
-  .meta .label { color: var(--text-dim); }
-  .meta .val { color: var(--text); margin-left: 4px; }
 
   /* Brush cursor overlay */
   .brush-cursor {
@@ -462,7 +634,7 @@
   .tool-btn svg { flex-shrink: 0; }
 
   .canvas-wrap canvas.eyedropper-active {
-    cursor: crosshair;
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 22l1-1h3l9-9'/%3E%3Cpath d='M3 21l9-9'/%3E%3Ccircle cx='17' cy='7' r='3'/%3E%3Cpath d='M20 4l1-1'/%3E%3C/svg%3E") 2 22, crosshair;
   }
 
   /* Shortcuts reference */
@@ -517,9 +689,121 @@
     border-radius: 50%;
   }
 
+  /* ---- File Organizer Panel (right rail) ---- */
+  .file-organizer .fo-body {
+    gap: 12px;
+  }
+
+  .fo-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .fo-field label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .fo-field .fo-input-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .fo-field input[type="text"] {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 12px;
+    min-width: 0;
+  }
+
+  .fo-field input[type="text"]::placeholder {
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+
+  .fo-settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+
+  .fo-settings label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .fo-settings label input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+  }
+
+  .fo-retouched-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .fo-dirty-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.2s;
+  }
+
+  .fo-dirty-dot.dirty {
+    background: var(--accent);
+    animation: pulse 1.5s infinite;
+  }
+
+  .fo-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+
+  .fo-preview .fo-filename {
+    font-family: inherit;
+    color: var(--text);
+    word-break: break-all;
+    flex: 1;
+  }
+
+  .fo-preview .fo-filename .fo-dim {
+    color: var(--text-dim);
+  }
+
+  .fo-preview .btn-save {
+    padding: 8px 16px;
+    font-weight: 600;
+    width: 100%;
+  }
+
   @media (max-width: 1000px) {
     .container { grid-template-columns: 1fr; }
-    .retouch-panel { border-left: none; border-top: 1px solid var(--border); }
+    .rail-panel { width: auto; border-left: none; border-top: 1px solid var(--border); }
+    .rail-panel.collapsed { width: auto; }
+    .rail-panel.collapsed .rail-header { height: auto; }
+    .rail-panel.collapsed .rail-title { writing-mode: horizontal-tb; }
   }
 </style>
 </head>
@@ -550,6 +834,21 @@
       <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" hidden>
       <div class="source-preview" id="sourcePreview">
         <span class="placeholder">No image loaded</span>
+      </div>
+      <div class="crop-controls" id="cropControls">
+        <div class="control">
+          <label>Rotation</label>
+          <input type="range" id="cropRotation" min="-45" max="45" step="1" value="0">
+          <span class="value" id="cropRotationVal">0&deg;</span>
+        </div>
+        <div class="control">
+          <label>Crop Size</label>
+          <input type="range" id="cropSize" min="50" max="200" step="5" value="100">
+          <span class="value" id="cropSizeVal">100%</span>
+        </div>
+        <div class="btn-row">
+          <button class="btn" id="btnCropReset" style="font-size:11px; padding:4px 10px;">Reset Crop</button>
+        </div>
       </div>
     </div>
 
@@ -613,7 +912,7 @@
       </div>
 
       <div class="control">
-        <label>Scale</label>
+        <label>Export Scale</label>
         <select id="scale">
           <option value="4">4&times;</option>
           <option value="8" selected>8&times;</option>
@@ -636,7 +935,26 @@
   <!-- Canvas -->
   <div class="canvas-area">
     <div class="result-card">
-      <h3><span class="dot" id="browserDot"></span> Portrait</h3>
+      <div class="portrait-toolbar">
+        <div class="toolbar-left">
+          <span class="dot" id="browserDot"></span>
+          <span class="toolbar-title">Portrait</span>
+          <span class="meta-sep">|</span>
+          <span class="meta-inline"><span class="label">Time:</span><span class="val" id="browserTime">&mdash;</span></span>
+          <span class="meta-inline"><span class="label">Colors:</span><span class="val" id="browserColorCount">&mdash;</span></span>
+          <span class="meta-inline"><span class="label">Export:</span><span class="val" id="exportSize">&mdash;</span></span>
+        </div>
+        <div class="toolbar-right">
+          <button class="zoom-btn" id="zoomOut" title="Zoom out">&minus;</button>
+          <input type="range" class="zoom-slider" id="zoomSlider" min="25" max="800" value="100">
+          <button class="zoom-btn" id="zoomIn" title="Zoom in">+</button>
+          <span class="zoom-pct" id="zoomPct">100%</span>
+          <button class="zoom-btn text" id="zoomReset" title="Reset to 100%">Reset</button>
+          <label class="zoom-invert-label" title="Invert scroll wheel zoom direction">
+            <input type="checkbox" id="zoomInvert"> Invert
+          </label>
+        </div>
+      </div>
       <div class="canvas-wrap" id="canvasWrap">
         <canvas id="browserCanvas" width="512" height="512"></canvas>
         <div class="brush-cursor" id="brushCursor"></div>
@@ -645,15 +963,21 @@
           <span style="font-size:11px;color:var(--text-dim)">Processing...</span>
         </div>
       </div>
-      <div class="meta">
-        <span><span class="label">Time:</span><span class="val" id="browserTime">&mdash;</span></span>
-        <span><span class="label">Colors:</span><span class="val" id="browserColorCount">&mdash;</span></span>
-      </div>
     </div>
   </div>
 
   <!-- Retouch Panel -->
-  <div class="retouch-panel">
+  <div class="retouch-panel rail-panel" id="retouchPanel">
+    <div class="rail-header" id="rpToggle">
+      <span class="rail-title">
+        <svg class="rail-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        Retouch
+      </span>
+    </div>
+    <div class="rp-body rail-body">
     <div>
       <div class="panel-title">Palette</div>
       <div class="palette-swatches" id="browserSwatches">
@@ -716,6 +1040,56 @@
         <b>Right click</b> &mdash; Flood fill
       </div>
     </div>
+    </div><!-- /.rp-body -->
+  </div>
+
+  <!-- File Organizer Panel -->
+  <div class="file-organizer rail-panel collapsed" id="fileOrganizer">
+    <div class="rail-header" id="foToggle">
+      <span class="rail-title">
+        <svg class="rail-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        File Organizer
+      </span>
+    </div>
+    <div class="fo-body rail-body">
+      <div class="fo-field">
+        <label>Save Directory</label>
+        <div class="fo-input-row">
+          <input type="text" id="foDirectory" placeholder="No directory selected" readonly>
+          <button class="btn" id="foBrowse">Browse</button>
+        </div>
+      </div>
+
+      <div class="fo-field">
+        <label>Root File Name</label>
+        <input type="text" id="foRootName" placeholder="photo_16bit">
+      </div>
+
+      <div class="fo-field">
+        <label>Include in Filename</label>
+        <div class="fo-settings">
+          <label><input type="checkbox" id="foIncSize" checked> Size</label>
+          <label><input type="checkbox" id="foIncColors" checked> Colors</label>
+          <label><input type="checkbox" id="foIncPalette"> Palette</label>
+          <label><input type="checkbox" id="foIncDither"> Dither</label>
+          <label><input type="checkbox" id="foIncSnes"> SNES Snap</label>
+          <label><input type="checkbox" id="foIncRemoveBg"> Remove BG</label>
+          <label><input type="checkbox" id="foIncScale"> Scale</label>
+          <label class="fo-retouched-wrap">
+            <input type="checkbox" id="foIncRetouched"> Retouched
+            <span class="fo-dirty-dot" id="foDirtyDot" title="No retouching"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="fo-preview">
+        <span class="fo-filename" id="foFilenamePreview">portrait.png</span>
+        <button class="btn primary btn-save" id="foSave" disabled>Download PNG</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -767,6 +1141,35 @@ class PixelPortrait {
     }
   }
 
+  async detectFace(imageSource) {
+    const img = await this._loadImage(imageSource);
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = img.width;
+    srcCanvas.height = img.height;
+    srcCanvas.getContext('2d').drawImage(img, 0, 0);
+
+    if (!this.faceLandmarker) return null;
+
+    const result = this.faceLandmarker.detect(srcCanvas);
+    if (!result.faceLandmarks || result.faceLandmarks.length === 0) return null;
+
+    const landmarks = result.faceLandmarks[0];
+    const bbox = this._getBoundingBox(landmarks, img.width, img.height);
+
+    const eyeL = landmarks[33];
+    const eyeR = landmarks[263];
+    const angle = Math.atan2(
+      eyeR.y * img.height - eyeL.y * img.height,
+      eyeR.x * img.width - eyeL.x * img.width
+    );
+
+    const cx = bbox.x + bbox.w / 2;
+    const cy = bbox.y + bbox.h / 2;
+    const size = Math.max(bbox.w, bbox.h);
+
+    return { landmarks, cx, cy, size, angle, imgW: img.width, imgH: img.height };
+  }
+
   async process(imageSource, options = {}) {
     const {
       outputSize = 64,
@@ -775,6 +1178,7 @@ class PixelPortrait {
       dither = 'none',
       removeBg = false,
       bgThreshold = 0.5,
+      cropOverride = null,
     } = options;
 
     const t0 = performance.now();
@@ -787,19 +1191,37 @@ class PixelPortrait {
     const srcCtx = srcCanvas.getContext('2d');
     srcCtx.drawImage(img, 0, 0);
 
-    // 1. Face detection
+    // 1. Face detection (or use crop override)
     let landmarks = null;
     let bbox = null;
-    if (this.faceLandmarker) {
-      const result = this.faceLandmarker.detect(srcCanvas);
-      if (result.faceLandmarks && result.faceLandmarks.length > 0) {
-        landmarks = result.faceLandmarks[0];
-        bbox = this._getBoundingBox(landmarks, img.width, img.height);
-      }
-    }
+    let angle = 0;
 
-    if (!bbox) {
-      throw new Error('No face detected');
+    if (cropOverride) {
+      landmarks = cropOverride.landmarks;
+      angle = cropOverride.angle;
+      bbox = {
+        x: cropOverride.cx - cropOverride.size / 2,
+        y: cropOverride.cy - cropOverride.size / 2,
+        w: cropOverride.size,
+        h: cropOverride.size,
+      };
+    } else {
+      if (this.faceLandmarker) {
+        const result = this.faceLandmarker.detect(srcCanvas);
+        if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+          landmarks = result.faceLandmarks[0];
+          bbox = this._getBoundingBox(landmarks, img.width, img.height);
+        }
+      }
+      if (!bbox) {
+        throw new Error('No face detected');
+      }
+      const eyeL = landmarks[33];
+      const eyeR = landmarks[263];
+      angle = Math.atan2(
+        eyeR.y * img.height - eyeL.y * img.height,
+        eyeR.x * img.width - eyeL.x * img.width
+      );
     }
 
     // 2. Crop & align
@@ -807,18 +1229,6 @@ class PixelPortrait {
     cropCanvas.width = 256;
     cropCanvas.height = 256;
     const cropCtx = cropCanvas.getContext('2d');
-
-    // Eye positions for alignment
-    const eyeL = landmarks[33];
-    const eyeR = landmarks[263];
-    const eyeLx = eyeL.x * img.width;
-    const eyeLy = eyeL.y * img.height;
-    const eyeRx = eyeR.x * img.width;
-    const eyeRy = eyeR.y * img.height;
-    const angle = Math.atan2(eyeRy - eyeLy, eyeRx - eyeLx);
-
-    const cx = (bbox.x + bbox.w / 2);
-    const cy = (bbox.y + bbox.h / 2);
 
     cropCtx.save();
     cropCtx.translate(128, 128);
@@ -1261,6 +1671,233 @@ const btnEyedropper = document.getElementById('btnEyedropper');
 let currentFile = null;
 let browserResult = null;
 
+// ============================================================
+// Crop Overlay System
+// ============================================================
+
+let detectedCrop = null;     // result from portrait.detectFace()
+let cropRotationOffset = 0;  // degrees, user adjustment
+let cropSizeScale = 1.0;     // multiplier, user adjustment
+
+const cropControls = document.getElementById('cropControls');
+const cropRotationSlider = document.getElementById('cropRotation');
+const cropRotationVal = document.getElementById('cropRotationVal');
+const cropSizeSlider = document.getElementById('cropSize');
+const cropSizeVal = document.getElementById('cropSizeVal');
+
+function getCropOverride() {
+  if (!detectedCrop) return null;
+  const angleOffset = cropRotationOffset * Math.PI / 180;
+  return {
+    landmarks: detectedCrop.landmarks,
+    cx: detectedCrop.cx,
+    cy: detectedCrop.cy,
+    size: detectedCrop.size * cropSizeScale,
+    angle: detectedCrop.angle + angleOffset,
+  };
+}
+
+function drawCropOverlay() {
+  if (!detectedCrop) return;
+
+  const preview = document.getElementById('sourcePreview');
+  const imgEl = preview.querySelector('img');
+  if (!imgEl) return;
+
+  // Remove existing overlay
+  let overlay = preview.querySelector('.crop-overlay');
+  if (!overlay) {
+    overlay = document.createElement('canvas');
+    overlay.className = 'crop-overlay';
+    preview.appendChild(overlay);
+  }
+
+  // Match overlay to the displayed image dimensions
+  const imgRect = imgEl.getBoundingClientRect();
+  const previewRect = preview.getBoundingClientRect();
+  overlay.width = imgRect.width;
+  overlay.height = imgRect.height;
+  overlay.style.width = imgRect.width + 'px';
+  overlay.style.height = imgRect.height + 'px';
+  overlay.style.left = (imgRect.left - previewRect.left) + 'px';
+  overlay.style.top = (imgRect.top - previewRect.top) + 'px';
+
+  const ctx = overlay.getContext('2d');
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+  // Map crop params from image coords to display coords
+  const scaleX = imgRect.width / detectedCrop.imgW;
+  const scaleY = imgRect.height / detectedCrop.imgH;
+
+  const crop = getCropOverride();
+  const cx = crop.cx * scaleX;
+  const cy = crop.cy * scaleY;
+  const halfSize = (crop.size / 2) * Math.max(scaleX, scaleY);
+  const angle = crop.angle;
+
+  // Draw dark mask with cutout
+  ctx.save();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(0, 0, overlay.width, overlay.height);
+
+  // Cut out the rotated square
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.translate(cx, cy);
+  ctx.rotate(-angle);
+  ctx.fillStyle = 'white';
+  ctx.fillRect(-halfSize, -halfSize, halfSize * 2, halfSize * 2);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Draw crop border
+  ctx.strokeStyle = 'rgba(233, 69, 96, 0.9)';
+  ctx.lineWidth = 2;
+  ctx.translate(cx, cy);
+  ctx.rotate(-angle);
+  ctx.strokeRect(-halfSize, -halfSize, halfSize * 2, halfSize * 2);
+
+  // Draw center crosshair
+  ctx.strokeStyle = 'rgba(233, 69, 96, 0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-6, 0); ctx.lineTo(6, 0);
+  ctx.moveTo(0, -6); ctx.lineTo(0, 6);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// Crop slider handlers
+cropRotationSlider.addEventListener('input', () => {
+  cropRotationOffset = parseInt(cropRotationSlider.value);
+  cropRotationVal.textContent = cropRotationOffset + '\u00b0';
+  drawCropOverlay();
+  scheduleRerun();
+});
+
+cropSizeSlider.addEventListener('input', () => {
+  cropSizeScale = parseInt(cropSizeSlider.value) / 100;
+  cropSizeVal.textContent = cropSizeSlider.value + '%';
+  drawCropOverlay();
+  scheduleRerun();
+});
+
+document.getElementById('btnCropReset').addEventListener('click', () => {
+  cropRotationOffset = 0;
+  cropSizeScale = 1.0;
+  cropRotationSlider.value = 0;
+  cropRotationVal.textContent = '0\u00b0';
+  cropSizeSlider.value = 100;
+  cropSizeVal.textContent = '100%';
+  drawCropOverlay();
+  scheduleRerun();
+});
+
+// Redraw overlay when window resizes (image display size may change)
+window.addEventListener('resize', () => { if (detectedCrop) drawCropOverlay(); });
+
+// ============================================================
+// Zoom System
+// ============================================================
+
+let currentZoom = 1.0;
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 8.0;
+const ZOOM_STEP = 1.25;       // +/- button multiplier
+const ZOOM_WHEEL_STEP = 1.08; // scroll wheel multiplier per tick
+
+const zoomSlider = document.getElementById('zoomSlider');
+const zoomPctEl = document.getElementById('zoomPct');
+const zoomInvertCheckbox = document.getElementById('zoomInvert');
+
+function applyZoom() {
+  const cssW = browserCanvas.width * currentZoom;
+  const cssH = browserCanvas.height * currentZoom;
+  browserCanvas.style.width = cssW + 'px';
+  browserCanvas.style.height = cssH + 'px';
+  const pct = Math.round(currentZoom * 100);
+  zoomPctEl.textContent = pct + '%';
+  zoomSlider.value = pct;
+}
+
+function setZoom(z) {
+  currentZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+  applyZoom();
+}
+
+document.getElementById('zoomIn').addEventListener('click', () => setZoom(currentZoom * ZOOM_STEP));
+document.getElementById('zoomOut').addEventListener('click', () => setZoom(currentZoom / ZOOM_STEP));
+document.getElementById('zoomReset').addEventListener('click', () => setZoom(1.0));
+
+zoomSlider.addEventListener('input', () => {
+  setZoom(parseInt(zoomSlider.value) / 100);
+});
+
+// Scroll wheel zoom (centered on cursor)
+canvasWrap.addEventListener('wheel', (e) => {
+  e.preventDefault();
+
+  const invert = zoomInvertCheckbox.checked;
+  const delta = invert ? e.deltaY : -e.deltaY;
+  const factor = delta > 0 ? ZOOM_WHEEL_STEP : 1 / ZOOM_WHEEL_STEP;
+  const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, currentZoom * factor));
+  if (newZoom === currentZoom) return;
+
+  // Zoom centered on mouse position
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const mouseX = e.clientX - wrapRect.left;
+  const mouseY = e.clientY - wrapRect.top;
+
+  // Point in content space before zoom
+  const contentX = mouseX + canvasWrap.scrollLeft;
+  const contentY = mouseY + canvasWrap.scrollTop;
+
+  // Scale to new zoom
+  const ratio = newZoom / currentZoom;
+  currentZoom = newZoom;
+  applyZoom();
+
+  // Scroll to keep the same content point under the mouse
+  canvasWrap.scrollLeft = contentX * ratio - mouseX;
+  canvasWrap.scrollTop = contentY * ratio - mouseY;
+}, { passive: false });
+
+// ============================================================
+// Retouch Dirty Tracking
+// ============================================================
+
+let retouchDirty = false;
+let algorithmSnapshot = null;
+
+function setRetouchDirty(dirty) {
+  retouchDirty = dirty;
+  const dot = document.getElementById('foDirtyDot');
+  dot.classList.toggle('dirty', dirty);
+  dot.title = dirty ? 'Canvas has been retouched' : 'No retouching';
+  updateFilenamePreview();
+}
+
+function storeAlgorithmSnapshot() {
+  const ctx = browserCanvas.getContext('2d');
+  algorithmSnapshot = ctx.getImageData(0, 0, browserCanvas.width, browserCanvas.height);
+}
+
+function compareToAlgorithmSnapshot() {
+  if (!algorithmSnapshot) return false;
+  const ctx = browserCanvas.getContext('2d');
+  const current = ctx.getImageData(0, 0, browserCanvas.width, browserCanvas.height);
+  if (current.width !== algorithmSnapshot.width || current.height !== algorithmSnapshot.height) {
+    return false;
+  }
+  const a = current.data;
+  const b = algorithmSnapshot.data;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 // Init
 portrait.init().then(() => {
   console.log('Browser pipeline ready');
@@ -1321,6 +1958,13 @@ document.getElementById('btnCamera').addEventListener('click', async () => {
   }
 });
 
+function updateExportSize() {
+  const s = getSettings();
+  const px = s.outputSize * s.scale;
+  document.getElementById('exportSize').textContent = `${px} \u00d7 ${px}`;
+  applyZoom();
+}
+
 // Debounced re-render: waits for rapid changes to settle before re-running
 let _rerunTimer = null;
 function scheduleRerun() {
@@ -1331,6 +1975,70 @@ function scheduleRerun() {
     clearRedo();
     runBrowserPipeline(currentFile);
   }, 80);
+}
+
+// Rescale canvas without re-running pipeline (preserves retouches)
+function rescaleCanvas() {
+  if (!browserResult) return;
+  const settings = getSettings();
+  const outputSize = settings.outputSize;
+  const newSize = outputSize * settings.scale;
+
+  // Helper: rescale a snapshot's imageData to a new display size
+  function rescaleSnapshot(snap) {
+    const tmp = document.createElement('canvas');
+    tmp.width = snap.width;
+    tmp.height = snap.height;
+    const tc = tmp.getContext('2d');
+    tc.putImageData(snap.imageData, 0, 0);
+
+    const out = document.createElement('canvas');
+    out.width = newSize;
+    out.height = newSize;
+    const oc = out.getContext('2d');
+    oc.imageSmoothingEnabled = false;
+    // Downscale to pixel art resolution, then upscale to new display size
+    oc.drawImage(tmp, 0, 0, newSize, newSize);
+
+    return {
+      imageData: oc.getImageData(0, 0, newSize, newSize),
+      width: newSize,
+      height: newSize,
+    };
+  }
+
+  // Rescale all undo/redo snapshots
+  for (let i = 0; i < undoStack.length; i++) {
+    undoStack[i] = rescaleSnapshot(undoStack[i]);
+  }
+  for (let i = 0; i < redoStack.length; i++) {
+    redoStack[i] = rescaleSnapshot(redoStack[i]);
+  }
+
+  // Rescale the current canvas
+  const rawCanvas = document.createElement('canvas');
+  rawCanvas.width = outputSize;
+  rawCanvas.height = outputSize;
+  const rawCtx = rawCanvas.getContext('2d');
+  rawCtx.imageSmoothingEnabled = false;
+  rawCtx.drawImage(browserCanvas, 0, 0, outputSize, outputSize);
+
+  browserCanvas.width = newSize;
+  browserCanvas.height = newSize;
+  const ctx = browserCanvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(rawCanvas, 0, 0, newSize, newSize);
+
+  // Rescale algorithm snapshot for dirty tracking
+  if (algorithmSnapshot) {
+    const snap = rescaleSnapshot({
+      imageData: algorithmSnapshot,
+      width: algorithmSnapshot.width,
+      height: algorithmSnapshot.height,
+    });
+    algorithmSnapshot = snap.imageData;
+  }
+  updateExportSize();
 }
 
 // Remove BG toggle — show/hide threshold slider + live re-render
@@ -1349,12 +2057,15 @@ bgThresholdSlider.addEventListener('input', () => {
   scheduleRerun();
 });
 
-// All settings → live re-render on any change
-for (const id of ['outputSize', 'paletteColors', 'paletteName', 'dither', 'snesSnap', 'scale']) {
+// All settings (except scale) → live re-render on any change
+for (const id of ['outputSize', 'paletteColors', 'paletteName', 'dither', 'snesSnap']) {
   const el = document.getElementById(id);
   el.addEventListener('change', scheduleRerun);
   el.addEventListener('input', scheduleRerun);
 }
+
+// Scale → rescale display only (preserves retouches)
+document.getElementById('scale').addEventListener('change', rescaleCanvas);
 
 async function handleFile(file) {
   currentFile = file;
@@ -1367,6 +2078,37 @@ async function handleFile(file) {
   undoStack.length = 0;
   redoStack.length = 0;
   updateHistoryUI();
+
+  // Reset retouch tracking
+  setRetouchDirty(false);
+  algorithmSnapshot = null;
+
+  // Set root file name from source filename
+  const baseName = file.name.replace(/\.[^.]+$/, '');
+  document.getElementById('foRootName').value = baseName + '_16bit';
+  updateFilenamePreview();
+
+  // Reset crop adjustments for new image
+  cropRotationOffset = 0;
+  cropSizeScale = 1.0;
+  cropRotationSlider.value = 0;
+  cropRotationVal.textContent = '0\u00b0';
+  cropSizeSlider.value = 100;
+  cropSizeVal.textContent = '100%';
+
+  // Detect face and show crop overlay
+  detectedCrop = await portrait.detectFace(file);
+  if (detectedCrop) {
+    cropControls.classList.add('visible');
+    const imgEl = sourcePreview.querySelector('img');
+    if (imgEl.complete) {
+      drawCropOverlay();
+    } else {
+      imgEl.addEventListener('load', () => drawCropOverlay(), { once: true });
+    }
+  } else {
+    cropControls.classList.remove('visible');
+  }
 
   // Run browser pipeline immediately
   await runBrowserPipeline(file);
@@ -1398,6 +2140,7 @@ async function runBrowserPipeline(file) {
       dither: settings.dither,
       removeBg: settings.removeBg,
       bgThreshold: settings.bgThreshold,
+      cropOverride: getCropOverride(),
     });
 
     // Draw to display canvas (upscaled)
@@ -1411,6 +2154,7 @@ async function runBrowserPipeline(file) {
     // Update meta
     document.getElementById('browserTime').textContent = `${result.processingMs}ms`;
     document.getElementById('browserColorCount').textContent = result.palette.length;
+    updateExportSize();
 
     // Swatches (clickable for brush)
     clearBrush();
@@ -1420,10 +2164,17 @@ async function runBrowserPipeline(file) {
     browserResult = browserCanvas;
     btnDownload.disabled = false;
     btnDownloadAll.disabled = false;
+
+    // Reset retouch tracking — algorithm just produced fresh output
+    setRetouchDirty(false);
+    storeAlgorithmSnapshot();
+    updateSaveEnabled();
+    updateFilenamePreview();
   } catch (err) {
     console.error('Browser pipeline error:', err);
     document.getElementById('browserTime').textContent = `Error: ${err.message}`;
     browserDot.className = 'dot';
+    updateSaveEnabled();
   }
 
   browserSpinner.classList.remove('show');
@@ -1495,6 +2246,7 @@ function restoreSnapshot(state) {
   const ctx = browserCanvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.putImageData(state.imageData, 0, 0);
+  applyZoom();
 }
 
 function pushUndo() {
@@ -1516,6 +2268,10 @@ function popUndo() {
   if (redoStack.length > MAX_HISTORY) redoStack.shift();
   restoreSnapshot(undoStack.pop());
   updateHistoryUI();
+  // Check if undo has reverted to the algorithm output
+  if (compareToAlgorithmSnapshot()) {
+    setRetouchDirty(false);
+  }
 }
 
 function popRedo() {
@@ -1525,6 +2281,7 @@ function popRedo() {
   if (undoStack.length > MAX_HISTORY) undoStack.shift();
   restoreSnapshot(redoStack.pop());
   updateHistoryUI();
+  setRetouchDirty(true);
 }
 
 function updateHistoryUI() {
@@ -1641,9 +2398,9 @@ function updateCursorPreview(event) {
   const rect = canvasWrap.getBoundingClientRect();
   const canvasRect = browserCanvas.getBoundingClientRect();
 
-  // Canvas position relative to wrap
-  const canvasOffX = canvasRect.left - rect.left;
-  const canvasOffY = canvasRect.top - rect.top;
+  // Canvas position in content space (accounts for scroll offset)
+  const canvasOffX = canvasRect.left - rect.left + canvasWrap.scrollLeft;
+  const canvasOffY = canvasRect.top - rect.top + canvasWrap.scrollTop;
 
   const sx = browserCanvas.width / canvasRect.width;
   const sy = browserCanvas.height / canvasRect.height;
@@ -1657,7 +2414,7 @@ function updateCursorPreview(event) {
   const gx = Math.floor(rawX / ps);
   const gy = Math.floor(rawY / ps);
 
-  // Convert grid position back to CSS pixels relative to canvasWrap
+  // Convert grid position back to CSS pixels in content space
   const cssLeft = canvasOffX + (gx * ps) / sx;
   const cssTop = canvasOffY + (gy * ps) / sy;
   const cssWidth = (brushSize * ps) / sx;
@@ -1731,6 +2488,7 @@ function onPaintStart(event) {
   pushUndo();
   clearRedo();
   paintUndoPushed = true;
+  setRetouchDirty(true);
   isPainting = true;
   lastPaintGrid = { gx, gy };
 
@@ -1785,6 +2543,7 @@ function floodFill(canvas, event) {
 
   pushUndo();
   clearRedo();
+  setRetouchDirty(true);
 
   const ctx = canvas.getContext('2d');
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1955,6 +2714,195 @@ document.addEventListener('keyup', (e) => {
     }
   }
 });
+
+
+// ============================================================
+// File Organizer: Filename Construction
+// ============================================================
+
+const PALETTE_ABBREV = {
+  '':               'Auto',
+  'chrono-trigger':  'CT',
+  'ff6-portraits':   'FF6',
+  'jehkoba32':       'Jk32',
+  'snes-warm':       'SNW',
+  'snes-cool':       'SNC',
+};
+
+const DITHER_ABBREV = {
+  'none':            'ND',
+  'bayer2x2':        'B2',
+  'bayer4x4':        'B4',
+  'floyd-steinberg': 'FS',
+};
+
+function buildFilename() {
+  const root = (document.getElementById('foRootName').value.trim() || 'portrait')
+    .replace(/[\/\\:*?"<>|]/g, '_');
+  const settings = getSettings();
+  const parts = [root];
+
+  if (document.getElementById('foIncSize').checked) {
+    parts.push(String(settings.outputSize));
+  }
+  if (document.getElementById('foIncColors').checked) {
+    parts.push(settings.paletteColors + 'c');
+  }
+  if (document.getElementById('foIncPalette').checked) {
+    const abbrev = PALETTE_ABBREV[settings.paletteName];
+    parts.push(abbrev !== undefined ? abbrev : settings.paletteName);
+  }
+  if (document.getElementById('foIncDither').checked) {
+    parts.push(DITHER_ABBREV[settings.dither] || settings.dither);
+  }
+  if (document.getElementById('foIncSnes').checked && settings.snesSnap) {
+    parts.push('SNES');
+  }
+  if (document.getElementById('foIncRemoveBg').checked && settings.removeBg) {
+    const thresh = Math.round(settings.bgThreshold * 100);
+    parts.push('NoBG' + thresh);
+  }
+  if (document.getElementById('foIncScale').checked) {
+    parts.push(settings.scale + 'x');
+  }
+  if (document.getElementById('foIncRetouched').checked && retouchDirty) {
+    parts.push('RTd');
+  }
+
+  return parts.join('_') + '.png';
+}
+
+function updateFilenamePreview() {
+  const filename = buildFilename();
+  const previewEl = document.getElementById('foFilenamePreview');
+  const root = (document.getElementById('foRootName').value.trim() || 'portrait')
+    .replace(/[\/\\:*?"<>|]/g, '_');
+  const suffix = filename.slice(root.length);
+  previewEl.innerHTML = `<span>${root}</span><span class="fo-dim">${suffix}</span>`;
+}
+
+
+// ============================================================
+// File Organizer: File System Access API + Save
+// ============================================================
+
+let directoryHandle = null;
+const hasDirectoryPicker = typeof window.showDirectoryPicker === 'function';
+
+const foPanel      = document.getElementById('fileOrganizer');
+const foToggle     = document.getElementById('foToggle');
+const foBrowse     = document.getElementById('foBrowse');
+const foDirectory  = document.getElementById('foDirectory');
+const foRootName   = document.getElementById('foRootName');
+const foSave       = document.getElementById('foSave');
+
+// Collapse/expand toggles for both right-rail panels
+foToggle.addEventListener('click', () => {
+  foPanel.classList.toggle('collapsed');
+});
+
+const rpPanel = document.getElementById('retouchPanel');
+const rpToggle = document.getElementById('rpToggle');
+rpToggle.addEventListener('click', () => {
+  rpPanel.classList.toggle('collapsed');
+});
+
+// Directory picker
+if (!hasDirectoryPicker) {
+  foBrowse.disabled = true;
+  foBrowse.title = 'Directory picker not supported in this browser — files will download normally';
+}
+
+foBrowse.addEventListener('click', async () => {
+  if (!hasDirectoryPicker) return;
+  try {
+    directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    foDirectory.value = directoryHandle.name;
+    updateSaveEnabled();
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.error('Directory picker error:', err);
+    }
+  }
+});
+
+// Save button enable/disable
+function updateSaveEnabled() {
+  foSave.disabled = !browserResult;
+  if (hasDirectoryPicker && directoryHandle) {
+    foSave.textContent = 'Save PNG';
+  } else {
+    foSave.textContent = 'Download PNG';
+  }
+}
+
+// Save action
+foSave.addEventListener('click', async () => {
+  if (!browserResult) return;
+
+  const filename = buildFilename();
+
+  if (hasDirectoryPicker && directoryHandle) {
+    try {
+      const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      const blob = await new Promise(resolve => {
+        browserResult.toBlob(resolve, 'image/png');
+      });
+      await writable.write(blob);
+      await writable.close();
+
+      // Visual feedback
+      foSave.textContent = 'Saved!';
+      foSave.style.background = 'var(--success)';
+      foSave.style.borderColor = 'var(--success)';
+      setTimeout(() => {
+        foSave.style.background = '';
+        foSave.style.borderColor = '';
+        updateSaveEnabled();
+      }, 1500);
+    } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        console.warn('Directory write permission lost, falling back to download');
+        directoryHandle = null;
+        foDirectory.value = '';
+        fallbackDownload(filename);
+      } else {
+        console.error('Save error:', err);
+        alert('Save failed: ' + err.message);
+      }
+    }
+  } else {
+    fallbackDownload(filename);
+  }
+});
+
+function fallbackDownload(filename) {
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = browserResult.toDataURL('image/png');
+  link.click();
+}
+
+// Filename preview: update on any organizer or settings change
+const foCheckboxIds = [
+  'foIncSize', 'foIncColors', 'foIncPalette', 'foIncDither',
+  'foIncSnes', 'foIncRemoveBg', 'foIncScale', 'foIncRetouched'
+];
+
+for (const id of foCheckboxIds) {
+  document.getElementById(id).addEventListener('change', updateFilenamePreview);
+}
+
+foRootName.addEventListener('input', updateFilenamePreview);
+
+// Also update preview when main settings change
+for (const id of ['outputSize', 'paletteColors', 'paletteName', 'dither',
+                   'snesSnap', 'removeBg', 'bgThreshold', 'scale']) {
+  const el = document.getElementById(id);
+  el.addEventListener('change', updateFilenamePreview);
+  el.addEventListener('input', updateFilenamePreview);
+}
 
 </script>
 </body>
