@@ -309,6 +309,56 @@
     cursor: crosshair;
   }
 
+  .brush-toolbar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .brush-toolbar.show { display: flex; }
+
+  .brush-toolbar .size-btns {
+    display: flex;
+    gap: 4px;
+  }
+
+  .brush-toolbar .size-btn {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg2);
+    color: var(--text);
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .brush-toolbar .size-btn.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #000;
+  }
+
+  .brush-toolbar kbd {
+    display: inline-block;
+    padding: 1px 5px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 10px;
+    color: var(--text);
+  }
+
   .download-row {
     display: flex;
     gap: 8px;
@@ -461,6 +511,23 @@
         <button class="btn" id="btnDownloadBoth" style="width:100%" disabled>Download Both</button>
       </div>
     </div>
+  </div>
+
+  <div class="brush-toolbar" id="brushToolbar">
+    <span>Brush:</span>
+    <div class="size-btns">
+      <button class="size-btn active" data-size="1">1</button>
+      <button class="size-btn" data-size="2">2</button>
+      <button class="size-btn" data-size="3">3</button>
+      <button class="size-btn" data-size="4">4</button>
+    </div>
+    <span style="margin-left:auto">
+      <kbd>1</kbd>–<kbd>4</kbd> size
+      &nbsp;
+      <kbd>Esc</kbd> deselect
+      &nbsp;
+      Right-click: fill
+    </span>
   </div>
 
   <div class="results">
@@ -1297,23 +1364,35 @@ btnDownloadBoth.addEventListener('click', () => {
 // ============================================================
 
 let activeBrush = null; // null | {r,g,b,a} where a=0 means transparent
+let brushSize = 1;      // 1–4 pixel-art pixels
+
+const brushToolbar = document.getElementById('brushToolbar');
+const sizeBtns = brushToolbar.querySelectorAll('.size-btn');
 
 function clearBrush() {
   activeBrush = null;
   document.querySelectorAll('.palette-swatches .swatch').forEach(s => s.classList.remove('active'));
   browserCanvas.classList.remove('brush-active');
   serverCanvas.classList.remove('brush-active');
+  brushToolbar.classList.remove('show');
 }
 
 function selectBrush(swatchEl, color) {
-  // Toggle off if same swatch clicked again
   if (swatchEl.classList.contains('active')) { clearBrush(); return; }
   clearBrush();
   activeBrush = color;
   swatchEl.classList.add('active');
   browserCanvas.classList.add('brush-active');
   serverCanvas.classList.add('brush-active');
+  brushToolbar.classList.add('show');
 }
+
+function setBrushSize(size) {
+  brushSize = size;
+  sizeBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.size) === size));
+}
+
+sizeBtns.forEach(b => b.addEventListener('click', () => setBrushSize(parseInt(b.dataset.size))));
 
 function buildSwatches(container, palette, source) {
   container.innerHTML = '';
@@ -1330,7 +1409,6 @@ function buildSwatches(container, palette, source) {
     }
     container.appendChild(s);
   }
-  // Always add a transparent brush
   const ts = document.createElement('div');
   ts.className = 'swatch transparent';
   ts.title = 'Transparent';
@@ -1343,36 +1421,118 @@ function hexToRgb(hex) {
   return [parseInt(h.substring(0,2), 16), parseInt(h.substring(2,4), 16), parseInt(h.substring(4,6), 16)];
 }
 
+// --- Paint (left click) ---
+
+function canvasToPixel(canvas, event) {
+  const rect = canvas.getBoundingClientRect();
+  const sx = canvas.width / rect.width;
+  const sy = canvas.height / rect.height;
+  const cx = Math.floor((event.clientX - rect.left) * sx);
+  const cy = Math.floor((event.clientY - rect.top) * sy);
+  const settings = getSettings();
+  const ps = Math.round(canvas.width / settings.outputSize);
+  return { cx, cy, ps, outputSize: settings.outputSize };
+}
+
 function paintPixel(canvas, event) {
   if (!activeBrush) return;
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const cx = Math.floor((event.clientX - rect.left) * scaleX);
-  const cy = Math.floor((event.clientY - rect.top) * scaleY);
+  const { cx, cy, ps, outputSize } = canvasToPixel(canvas, event);
+  if (ps < 1) return;
 
-  // Determine pixel-art scale from canvas size
-  const settings = getSettings();
-  const pixelScale = Math.round(canvas.width / settings.outputSize);
-  if (pixelScale < 1) return;
-
-  const px = Math.floor(cx / pixelScale) * pixelScale;
-  const py = Math.floor(cy / pixelScale) * pixelScale;
-
+  const gx = Math.floor(cx / ps);
+  const gy = Math.floor(cy / ps);
   const ctx = canvas.getContext('2d');
-  if (activeBrush.a === 0) {
-    ctx.clearRect(px, py, pixelScale, pixelScale);
-  } else {
-    ctx.fillStyle = `rgb(${activeBrush.r},${activeBrush.g},${activeBrush.b})`;
-    ctx.fillRect(px, py, pixelScale, pixelScale);
+
+  for (let dy = 0; dy < brushSize; dy++) {
+    for (let dx = 0; dx < brushSize; dx++) {
+      const tx = gx + dx, ty = gy + dy;
+      if (tx >= outputSize || ty >= outputSize) continue;
+      if (activeBrush.a === 0) {
+        ctx.clearRect(tx * ps, ty * ps, ps, ps);
+      } else {
+        ctx.fillStyle = `rgb(${activeBrush.r},${activeBrush.g},${activeBrush.b})`;
+        ctx.fillRect(tx * ps, ty * ps, ps, ps);
+      }
+    }
   }
 }
 
 browserCanvas.addEventListener('click', (e) => paintPixel(browserCanvas, e));
 serverCanvas.addEventListener('click', (e) => paintPixel(serverCanvas, e));
 
-// Escape key clears brush
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') clearBrush(); });
+// --- Flood fill (right click) ---
+
+function floodFill(canvas, event) {
+  if (!activeBrush) return;
+  event.preventDefault();
+
+  const { cx, cy, ps, outputSize } = canvasToPixel(canvas, event);
+  if (ps < 1) return;
+  const gx = Math.floor(cx / ps);
+  const gy = Math.floor(cy / ps);
+  if (gx < 0 || gx >= outputSize || gy < 0 || gy >= outputSize) return;
+
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imgData.data;
+
+  // Read the target color at the clicked pixel (sample center of the block)
+  const si = ((gy * ps + Math.floor(ps / 2)) * canvas.width + (gx * ps + Math.floor(ps / 2))) * 4;
+  const tr = d[si], tg = d[si + 1], tb = d[si + 2], ta = d[si + 3];
+
+  // Don't fill if target matches brush
+  if (activeBrush.a === 0 && ta === 0) return;
+  if (activeBrush.a !== 0 && tr === activeBrush.r && tg === activeBrush.g && tb === activeBrush.b && ta === 255) return;
+
+  const visited = new Uint8Array(outputSize * outputSize);
+  const queue = [gy * outputSize + gx];
+  visited[queue[0]] = 1;
+
+  function matchTarget(px, py) {
+    const idx = ((py * ps + Math.floor(ps / 2)) * canvas.width + (px * ps + Math.floor(ps / 2))) * 4;
+    return d[idx] === tr && d[idx + 1] === tg && d[idx + 2] === tb && d[idx + 3] === ta;
+  }
+
+  let qi = 0;
+  while (qi < queue.length) {
+    const idx = queue[qi++];
+    const px = idx % outputSize, py = (idx - px) / outputSize;
+    // Paint this pixel block
+    for (let by = 0; by < ps; by++) {
+      for (let bx = 0; bx < ps; bx++) {
+        const fi = ((py * ps + by) * canvas.width + (px * ps + bx)) * 4;
+        if (activeBrush.a === 0) {
+          d[fi] = 0; d[fi + 1] = 0; d[fi + 2] = 0; d[fi + 3] = 0;
+        } else {
+          d[fi] = activeBrush.r; d[fi + 1] = activeBrush.g; d[fi + 2] = activeBrush.b; d[fi + 3] = 255;
+        }
+      }
+    }
+    // Spread to neighbors
+    const neighbors = [];
+    if (px > 0) neighbors.push(idx - 1);
+    if (px < outputSize - 1) neighbors.push(idx + 1);
+    if (py > 0) neighbors.push(idx - outputSize);
+    if (py < outputSize - 1) neighbors.push(idx + outputSize);
+    for (const ni of neighbors) {
+      if (visited[ni]) continue;
+      visited[ni] = 1;
+      const nx = ni % outputSize, ny = (ni - nx) / outputSize;
+      if (matchTarget(nx, ny)) queue.push(ni);
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+browserCanvas.addEventListener('contextmenu', (e) => floodFill(browserCanvas, e));
+serverCanvas.addEventListener('contextmenu', (e) => floodFill(serverCanvas, e));
+
+// --- Keyboard shortcuts ---
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') clearBrush();
+  if (e.key >= '1' && e.key <= '4' && activeBrush) setBrushSize(parseInt(e.key));
+});
 
 </script>
 </body>
