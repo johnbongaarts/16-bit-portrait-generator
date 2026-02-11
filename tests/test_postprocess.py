@@ -126,11 +126,14 @@ class TestRemoveBackground:
         "mouth": (128, 180),
     }
 
-    def test_returns_same_shape(self):
+    def test_returns_image_and_mask(self):
         img = np.random.randint(0, 256, (256, 256, 3), dtype=np.uint8)
-        result = remove_background(img, self._landmarks, threshold=0.5)
+        result, mask = remove_background(img, self._landmarks, threshold=0.5)
         assert result.shape == img.shape
         assert result.dtype == np.uint8
+        assert mask.shape == (256, 256)
+        assert mask.dtype == np.uint8
+        assert set(np.unique(mask)).issubset({0, 255})
 
     def _make_face_image(self):
         """Create a test image with a bright center (face) and dark edges (background)."""
@@ -146,14 +149,15 @@ class TestRemoveBackground:
 
     def test_threshold_zero_removes_more(self):
         img = self._make_face_image()
-        result_tight = remove_background(img, self._landmarks, threshold=0.0)
-        result_loose = remove_background(img, self._landmarks, threshold=1.0)
-        black_tight = np.sum(np.all(result_tight == 0, axis=2))
-        black_loose = np.sum(np.all(result_loose == 0, axis=2))
-        assert black_tight > black_loose
+        _, mask_tight = remove_background(img, self._landmarks, threshold=0.0)
+        _, mask_loose = remove_background(img, self._landmarks, threshold=1.0)
+        bg_tight = np.sum(mask_tight == 0)
+        bg_loose = np.sum(mask_loose == 0)
+        assert bg_tight > bg_loose
 
-    def test_custom_bg_color(self):
+    def test_mask_matches_black_pixels(self):
         img = self._make_face_image()
-        result = remove_background(img, self._landmarks, threshold=0.0, bg_color=(255, 0, 255))
-        magenta_pixels = np.sum(np.all(result == [255, 0, 255], axis=2))
-        assert magenta_pixels > 0
+        result, mask = remove_background(img, self._landmarks, threshold=0.5)
+        # Where mask is 0 (background), image should be black
+        bg_pixels = result[mask == 0]
+        assert np.all(bg_pixels == 0)

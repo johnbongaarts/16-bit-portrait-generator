@@ -7,8 +7,7 @@ def remove_background(
     image: np.ndarray,
     landmarks: dict,
     threshold: float = 0.5,
-    bg_color: tuple[int, int, int] = (0, 0, 0),
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     """Remove background using GrabCut with a landmark-derived face ellipse as prior.
 
     Args:
@@ -16,10 +15,10 @@ def remove_background(
         landmarks: dict with eye_left, eye_right, nose, mouth as (x, y) tuples
                    in the image's coordinate space (0..image_size).
         threshold: 0.0 = aggressive removal (tight mask), 1.0 = conservative (loose mask).
-        bg_color: RGB tuple for background fill. Default black.
 
     Returns:
-        Image with background replaced by bg_color.
+        result: Image with background set to black (H x W x 3 uint8).
+        fg_mask: Binary foreground mask (H x W uint8, 255=foreground, 0=background).
     """
     import cv2
 
@@ -57,12 +56,14 @@ def remove_background(
     fgd_model = np.zeros((1, 65), np.float64)
     cv2.grabCut(img_bgr, mask, None, bgd_model, fgd_model, 5, cv2.GC_INIT_WITH_MASK)
 
-    fg_mask = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 1, 0).astype(np.uint8)
+    fg_mask = np.where(
+        (mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0
+    ).astype(np.uint8)
 
     result = image.copy()
-    result[fg_mask == 0] = bg_color
+    result[fg_mask == 0] = (0, 0, 0)
 
-    return result
+    return result, fg_mask
 
 
 def _luminance_oklab(r: int, g: int, b: int) -> float:

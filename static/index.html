@@ -943,12 +943,13 @@ class PixelPortrait {
       }
     }
 
-    // 6. Replace background pixels with black
+    // 6. Make background pixels transparent
     for (let i = 0; i < w * h; i++) {
       if (bg[i]) {
         d[i*4] = 0;
         d[i*4+1] = 0;
         d[i*4+2] = 0;
+        d[i*4+3] = 0;
       }
     }
 

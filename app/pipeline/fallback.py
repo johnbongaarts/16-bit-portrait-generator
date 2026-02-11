@@ -52,8 +52,9 @@ def run_algorithmic_pipeline(
     cropped, landmarks = detect_and_crop(image, target_size=256)
 
     # 1b. Background removal (optional)
+    fg_mask = None
     if remove_bg:
-        cropped = remove_background(cropped, landmarks, threshold=bg_threshold)
+        cropped, fg_mask = remove_background(cropped, landmarks, threshold=bg_threshold)
 
     # 2. Pre-process: slight blur + contrast/saturation boost
     # Gaussian blur sigma=1
@@ -87,5 +88,18 @@ def run_algorithmic_pipeline(
 
     # 6. Upscale
     output = upscale_nearest(quantized, scale)
+
+    # 7. Apply transparency mask if background was removed
+    if fg_mask is not None:
+        # Downscale mask to output_size, then upscale to match final output
+        mask_small = cv2.resize(
+            fg_mask, (output_size, output_size), interpolation=cv2.INTER_NEAREST
+        )
+        mask_up = upscale_nearest(
+            np.stack([mask_small] * 3, axis=-1), scale
+        )[:, :, 0]
+        # Compose RGBA
+        rgba = np.dstack([output, mask_up])
+        return rgba, palette_used, landmarks
 
     return output, palette_used, landmarks
