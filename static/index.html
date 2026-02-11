@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>16-Bit Portrait Generator — Test UI</title>
+<title>16-Bit Portrait Generator</title>
 <style>
   :root {
     --bg: #1a1a2e;
@@ -53,7 +53,7 @@
 
   .container {
     display: grid;
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 280px 1fr 260px;
     gap: 0;
     min-height: calc(100vh - 58px);
   }
@@ -65,12 +65,23 @@
     overflow-y: auto;
   }
 
-  .results {
+  .canvas-area {
     padding: 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    align-content: start;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: start;
+    gap: 12px;
+  }
+
+  .retouch-panel {
+    background: var(--bg2);
+    padding: 16px;
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .section {
@@ -83,6 +94,16 @@
     letter-spacing: 2px;
     color: var(--text-dim);
     margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
     padding-bottom: 6px;
     border-bottom: 1px solid var(--border);
   }
@@ -192,11 +213,14 @@
     height: 16px;
   }
 
+  /* Canvas display */
   .result-card {
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 16px;
+    width: 100%;
+    max-width: 640px;
   }
 
   .result-card h3 {
@@ -239,6 +263,10 @@
     max-height: 100%;
   }
 
+  .canvas-wrap canvas.brush-active {
+    cursor: none;
+  }
+
   .canvas-wrap .spinner {
     position: absolute;
     display: none;
@@ -266,97 +294,159 @@
     margin-top: 12px;
     font-size: 11px;
     color: var(--text-dim);
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 4px 12px;
+    display: flex;
+    gap: 16px;
   }
 
   .meta .label { color: var(--text-dim); }
-  .meta .val { color: var(--text); }
+  .meta .val { color: var(--text); margin-left: 4px; }
 
+  /* Brush cursor overlay */
+  .brush-cursor {
+    position: absolute;
+    pointer-events: none;
+    border: 2px solid var(--accent);
+    box-sizing: border-box;
+    display: none;
+    z-index: 10;
+    mix-blend-mode: difference;
+  }
+
+  .brush-cursor.transparent-brush {
+    border-style: dashed;
+    border-color: #fff;
+  }
+
+  /* Retouch panel: palette */
   .palette-swatches {
     display: flex;
     flex-wrap: wrap;
-    gap: 2px;
-    margin-top: 6px;
+    gap: 3px;
   }
 
   .palette-swatches .swatch {
-    width: 14px;
-    height: 14px;
-    border-radius: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
     border: 1px solid rgba(255,255,255,0.1);
     cursor: pointer;
     transition: transform 0.1s;
   }
 
   .palette-swatches .swatch:hover {
-    transform: scale(1.3);
+    transform: scale(1.2);
     border-color: rgba(255,255,255,0.4);
   }
 
   .palette-swatches .swatch.active {
     outline: 2px solid var(--accent);
     outline-offset: 1px;
-    transform: scale(1.3);
+    transform: scale(1.2);
   }
 
   .palette-swatches .swatch.transparent {
     background: repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%) 50% / 8px 8px !important;
   }
 
-  .canvas-wrap canvas.brush-active {
-    cursor: crosshair;
-  }
-
-  .brush-toolbar {
-    display: none;
-    align-items: center;
-    gap: 12px;
-    margin-top: 8px;
-    padding: 8px 12px;
-    background: var(--bg);
-    border-radius: 6px;
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
-  .brush-toolbar.show { display: flex; grid-column: 1 / -1; }
-
-  .brush-toolbar .size-btns {
+  /* Brush size buttons */
+  .size-btns {
     display: flex;
     gap: 4px;
   }
 
-  .brush-toolbar .size-btn {
-    width: 24px;
-    height: 24px;
+  .size-btn {
+    width: 28px;
+    height: 28px;
     border: 1px solid var(--border);
-    border-radius: 3px;
-    background: var(--bg2);
+    border-radius: 4px;
+    background: var(--bg);
     color: var(--text);
-    font-size: 11px;
+    font-family: inherit;
+    font-size: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  .brush-toolbar .size-btn.active {
+  .size-btn.active {
     border-color: var(--accent);
     background: var(--accent);
     color: #000;
   }
 
-  .brush-toolbar kbd {
+  /* Active brush preview */
+  .active-brush-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+    min-height: 36px;
+  }
+
+  .active-brush-preview .preview-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+  }
+
+  .active-brush-preview .preview-swatch.transparent {
+    background: repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%) 50% / 8px 8px !important;
+  }
+
+  /* Undo button */
+  .undo-btn {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+
+  .undo-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); }
+  .undo-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .undo-count {
+    font-size: 10px;
+    background: var(--bg3);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text-dim);
+  }
+
+  /* Shortcuts reference */
+  .shortcuts {
+    font-size: 10px;
+    color: var(--text-dim);
+    line-height: 1.8;
+  }
+
+  .shortcuts kbd {
     display: inline-block;
     padding: 1px 5px;
-    background: var(--bg2);
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 3px;
     font-family: inherit;
     font-size: 10px;
     color: var(--text);
+    min-width: 18px;
+    text-align: center;
   }
 
   .download-row {
@@ -391,9 +481,9 @@
     border-radius: 50%;
   }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1000px) {
     .container { grid-template-columns: 1fr; }
-    .results { grid-template-columns: 1fr; }
+    .retouch-panel { border-left: none; border-top: 1px solid var(--border); }
   }
 </style>
 </head>
@@ -401,7 +491,7 @@
 
 <header>
   <h1>16-Bit Portrait Generator</h1>
-  <span class="badge">Test UI</span>
+  <span class="badge">Algorithmic</span>
 </header>
 
 <div class="container">
@@ -498,69 +588,73 @@
 
     </div>
 
-    <!-- Actions -->
+    <!-- Download -->
     <div class="section">
-      <button class="btn primary" id="btnGenerate" style="width:100%" disabled>
-        Generate (Server)
-      </button>
-      <div class="download-row">
-        <button class="btn" id="btnDownloadBrowser" disabled>Download Browser</button>
-        <button class="btn" id="btnDownloadServer" disabled>Download Server</button>
-      </div>
-      <div style="margin-top:8px">
-        <button class="btn" id="btnDownloadBoth" style="width:100%" disabled>Download Both</button>
-      </div>
+      <button class="btn primary" id="btnDownload" style="width:100%" disabled>Download PNG</button>
     </div>
   </div>
 
-  <div class="results">
-    <div class="brush-toolbar" id="brushToolbar">
-      <span>Brush:</span>
-      <div class="size-btns">
-        <button class="size-btn active" data-size="1">1</button>
-        <button class="size-btn" data-size="2">2</button>
-        <button class="size-btn" data-size="3">3</button>
-        <button class="size-btn" data-size="4">4</button>
-      </div>
-      <span style="margin-left:auto">
-        <kbd>1</kbd>–<kbd>4</kbd> size
-        &nbsp;
-        <kbd>Esc</kbd> deselect
-        &nbsp;
-        Right-click: fill
-      </span>
-    </div>
-    <!-- Browser Result -->
+  <!-- Canvas -->
+  <div class="canvas-area">
     <div class="result-card">
-      <h3><span class="dot" id="browserDot"></span> Browser Pipeline</h3>
-      <div class="canvas-wrap">
+      <h3><span class="dot" id="browserDot"></span> Portrait</h3>
+      <div class="canvas-wrap" id="canvasWrap">
         <canvas id="browserCanvas" width="512" height="512"></canvas>
+        <div class="brush-cursor" id="brushCursor"></div>
         <div class="spinner" id="browserSpinner">
           <div class="spinner-ring"></div>
           <span style="font-size:11px;color:var(--text-dim)">Processing...</span>
         </div>
       </div>
-      <div class="meta" id="browserMeta">
-        <span class="label">Processing:</span><span class="val" id="browserTime">—</span>
-        <span class="label">Colors:</span><span class="val" id="browserColorCount">—</span>
-        <span class="label">Palette:</span><span class="val"><div class="palette-swatches" id="browserSwatches"></div></span>
+      <div class="meta">
+        <span><span class="label">Time:</span><span class="val" id="browserTime">&mdash;</span></span>
+        <span><span class="label">Colors:</span><span class="val" id="browserColorCount">&mdash;</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Retouch Panel -->
+  <div class="retouch-panel">
+    <div>
+      <div class="panel-title">Palette</div>
+      <div class="palette-swatches" id="browserSwatches">
+        <span style="font-size:11px;color:var(--text-dim)">Generate a portrait first</span>
       </div>
     </div>
 
-    <!-- Server Result -->
-    <div class="result-card">
-      <h3><span class="dot" id="serverDot"></span> Server Pipeline</h3>
-      <div class="canvas-wrap">
-        <canvas id="serverCanvas" width="512" height="512"></canvas>
-        <div class="spinner" id="serverSpinner">
-          <div class="spinner-ring"></div>
-          <span style="font-size:11px;color:var(--text-dim)">Generating...</span>
-        </div>
+    <div>
+      <div class="panel-title">Active Brush</div>
+      <div class="active-brush-preview" id="activeBrushPreview">
+        <span>No brush selected &mdash; click a swatch</span>
       </div>
-      <div class="meta" id="serverMeta">
-        <span class="label">Processing:</span><span class="val" id="serverTime">—</span>
-        <span class="label">Colors:</span><span class="val" id="serverColorCount">—</span>
-        <span class="label">Palette:</span><span class="val"><div class="palette-swatches" id="serverSwatches"></div></span>
+    </div>
+
+    <div>
+      <div class="panel-title">Brush Size</div>
+      <div class="size-btns" id="sizeBtns">
+        <button class="size-btn active" data-size="1">1</button>
+        <button class="size-btn" data-size="2">2</button>
+        <button class="size-btn" data-size="3">3</button>
+        <button class="size-btn" data-size="4">4</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel-title">Undo</div>
+      <button class="undo-btn" id="btnUndo" disabled>
+        Undo <span class="undo-count" id="undoCount">0</span>
+      </button>
+    </div>
+
+    <div>
+      <div class="panel-title">Shortcuts</div>
+      <div class="shortcuts">
+        <kbd>1</kbd>&ndash;<kbd>4</kbd> Brush size<br>
+        <kbd>Esc</kbd> Deselect brush<br>
+        <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo<br>
+        <b>Left click</b> &mdash; Paint<br>
+        <b>Click + drag</b> &mdash; Stroke<br>
+        <b>Right click</b> &mdash; Flood fill
       </div>
     </div>
   </div>
@@ -1087,26 +1181,22 @@ class PixelPortrait {
 
 const portrait = new PixelPortrait();
 
-// DOM refs
-const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
-const btnUpload = document.getElementById('btnUpload');
-const btnCamera = document.getElementById('btnCamera');
+const dropZone = document.getElementById('dropZone');
 const sourcePreview = document.getElementById('sourcePreview');
-const btnGenerate = document.getElementById('btnGenerate');
-const btnDownloadBrowser = document.getElementById('btnDownloadBrowser');
-const btnDownloadServer = document.getElementById('btnDownloadServer');
-const btnDownloadBoth = document.getElementById('btnDownloadBoth');
+const btnUpload = document.getElementById('btnUpload');
+const btnDownload = document.getElementById('btnDownload');
 const browserCanvas = document.getElementById('browserCanvas');
-const serverCanvas = document.getElementById('serverCanvas');
 const browserDot = document.getElementById('browserDot');
-const serverDot = document.getElementById('serverDot');
 const browserSpinner = document.getElementById('browserSpinner');
-const serverSpinner = document.getElementById('serverSpinner');
+const canvasWrap = document.getElementById('canvasWrap');
+const brushCursor = document.getElementById('brushCursor');
+const btnUndo = document.getElementById('btnUndo');
+const undoCountEl = document.getElementById('undoCount');
+const activeBrushPreview = document.getElementById('activeBrushPreview');
 
 let currentFile = null;
 let browserResult = null;
-let serverResult = null;
 
 // Init
 portrait.init().then(() => {
@@ -1121,13 +1211,13 @@ fetch('/api/palettes')
     for (const p of data.palettes) {
       const opt = document.createElement('option');
       opt.value = p.slug;
-      opt.textContent = `${p.name} (${p.colors})`;
+      opt.textContent = `${p.name} (${p.colors.length})`;
       select.appendChild(opt);
     }
   })
-  .catch(() => {});
+  .catch(() => console.warn('Could not load palettes from server'));
 
-// Upload handlers
+// File input
 btnUpload.addEventListener('click', () => fileInput.click());
 dropZone.addEventListener('click', () => fileInput.click());
 
@@ -1141,30 +1231,28 @@ dropZone.addEventListener('drop', e => {
   dropZone.classList.remove('dragover');
   if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
 });
-
 fileInput.addEventListener('change', () => {
   if (fileInput.files.length) handleFile(fileInput.files[0]);
 });
 
 // Camera
-btnCamera.addEventListener('click', async () => {
+document.getElementById('btnCamera').addEventListener('click', async () => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
     const video = document.createElement('video');
     video.srcObject = stream;
-    video.play();
+    video.autoplay = true;
+    video.playsInline = true;
     await new Promise(r => video.onloadedmetadata = r);
-    await new Promise(r => setTimeout(r, 500)); // Let camera adjust
+    await video.play();
 
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
+    const c = document.createElement('canvas');
+    c.width = video.videoWidth;
+    c.height = video.videoHeight;
+    c.getContext('2d').drawImage(video, 0, 0);
     stream.getTracks().forEach(t => t.stop());
 
-    canvas.toBlob(blob => {
-      handleFile(new File([blob], 'camera.jpg', { type: 'image/jpeg' }));
-    }, 'image/jpeg', 0.9);
+    c.toBlob(blob => handleFile(new File([blob], 'camera.jpg', { type: 'image/jpeg' })), 'image/jpeg');
   } catch (err) {
     alert('Camera access denied: ' + err.message);
   }
@@ -1175,7 +1263,10 @@ let _rerunTimer = null;
 function scheduleRerun() {
   if (!currentFile) return;
   clearTimeout(_rerunTimer);
-  _rerunTimer = setTimeout(() => runBrowserPipeline(currentFile), 80);
+  _rerunTimer = setTimeout(() => {
+    pushUndo();
+    runBrowserPipeline(currentFile);
+  }, 80);
 }
 
 // Remove BG toggle — show/hide threshold slider + live re-render
@@ -1207,7 +1298,10 @@ async function handleFile(file) {
   // Show preview
   const url = URL.createObjectURL(file);
   sourcePreview.innerHTML = `<img src="${url}" alt="Source">`;
-  btnGenerate.disabled = false;
+
+  // Clear undo stack on new image
+  undoStack.length = 0;
+  updateUndoUI();
 
   // Run browser pipeline immediately
   await runBrowserPipeline(file);
@@ -1259,8 +1353,7 @@ async function runBrowserPipeline(file) {
 
     browserDot.className = 'dot active';
     browserResult = browserCanvas;
-    btnDownloadBrowser.disabled = false;
-    btnDownloadBoth.disabled = !serverResult;
+    btnDownload.disabled = false;
   } catch (err) {
     console.error('Browser pipeline error:', err);
     document.getElementById('browserTime').textContent = `Error: ${err.message}`;
@@ -1270,93 +1363,55 @@ async function runBrowserPipeline(file) {
   browserSpinner.classList.remove('show');
 }
 
-// Server generation
-btnGenerate.addEventListener('click', async () => {
-  if (!currentFile) return;
-
-  serverDot.className = 'dot processing';
-  serverSpinner.classList.add('show');
-  btnGenerate.disabled = true;
-
-  const settings = getSettings();
-  const formData = new FormData();
-  formData.append('image', currentFile);
-  formData.append('output_size', settings.outputSize);
-  formData.append('palette_colors', settings.paletteColors);
-  if (settings.paletteName) formData.append('palette_name', settings.paletteName);
-  formData.append('dither', settings.dither);
-  formData.append('snes_snap', settings.snesSnap);
-  formData.append('remove_bg', settings.removeBg);
-  formData.append('bg_threshold', settings.bgThreshold);
-  formData.append('scale', settings.scale);
-
-  try {
-    const response = await fetch('/api/generate', { method: 'POST', body: formData });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.detail?.message || err.message || 'Server error');
-    }
-
-    const blob = await response.blob();
-    const img = new Image();
-    img.src = URL.createObjectURL(blob);
-    await new Promise(r => img.onload = r);
-
-    serverCanvas.width = img.width;
-    serverCanvas.height = img.height;
-    const ctx = serverCanvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, 0);
-
-    // Parse headers
-    const timeMs = response.headers.get('X-Portrait-Processing-Ms') || '?';
-    const paletteHex = response.headers.get('X-Portrait-Palette') || '';
-
-    document.getElementById('serverTime').textContent = `${timeMs}ms`;
-
-    // Count unique colors from palette header
-    const colors = paletteHex.split(',').filter(Boolean);
-    document.getElementById('serverColorCount').textContent = colors.length;
-
-    // Swatches (clickable for brush)
-    clearBrush();
-    buildSwatches(document.getElementById('serverSwatches'), colors, 'hex');
-
-    serverDot.className = 'dot active';
-    serverResult = serverCanvas;
-    btnDownloadServer.disabled = false;
-    btnDownloadBoth.disabled = !browserResult;
-  } catch (err) {
-    console.error('Server generation error:', err);
-    document.getElementById('serverTime').textContent = `Error: ${err.message}`;
-    serverDot.className = 'dot';
+// Download
+btnDownload.addEventListener('click', () => {
+  if (browserResult) {
+    const link = document.createElement('a');
+    link.download = 'portrait.png';
+    link.href = browserResult.toDataURL('image/png');
+    link.click();
   }
-
-  serverSpinner.classList.remove('show');
-  btnGenerate.disabled = false;
 });
 
-// Downloads
-function downloadCanvas(canvas, filename) {
-  const link = document.createElement('a');
-  link.download = filename;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
+
+// ============================================================
+// Undo System
+// ============================================================
+
+const MAX_UNDO = 50;
+const undoStack = [];
+
+function pushUndo() {
+  if (!browserCanvas.width || !browserCanvas.height) return;
+  const ctx = browserCanvas.getContext('2d');
+  const snapshot = ctx.getImageData(0, 0, browserCanvas.width, browserCanvas.height);
+  undoStack.push({
+    imageData: snapshot,
+    width: browserCanvas.width,
+    height: browserCanvas.height,
+  });
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+  updateUndoUI();
 }
 
-btnDownloadBrowser.addEventListener('click', () => {
-  if (browserResult) downloadCanvas(browserResult, 'portrait-browser.png');
-});
+function popUndo() {
+  if (undoStack.length === 0) return;
+  const state = undoStack.pop();
+  browserCanvas.width = state.width;
+  browserCanvas.height = state.height;
+  const ctx = browserCanvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.putImageData(state.imageData, 0, 0);
+  updateUndoUI();
+}
 
-btnDownloadServer.addEventListener('click', () => {
-  if (serverResult) downloadCanvas(serverResult, 'portrait-server.png');
-});
+function updateUndoUI() {
+  btnUndo.disabled = undoStack.length === 0;
+  undoCountEl.textContent = undoStack.length;
+}
 
-btnDownloadBoth.addEventListener('click', () => {
-  if (browserResult) downloadCanvas(browserResult, 'portrait-browser.png');
-  if (serverResult) setTimeout(() => downloadCanvas(serverResult, 'portrait-server.png'), 100);
-});
+btnUndo.addEventListener('click', popUndo);
+
 
 // ============================================================
 // Pixel Brush — click palette swatch to paint on canvas
@@ -1365,15 +1420,12 @@ btnDownloadBoth.addEventListener('click', () => {
 let activeBrush = null; // null | {r,g,b,a} where a=0 means transparent
 let brushSize = 1;      // 1–4 pixel-art pixels
 
-const brushToolbar = document.getElementById('brushToolbar');
-const sizeBtns = brushToolbar.querySelectorAll('.size-btn');
-
 function clearBrush() {
   activeBrush = null;
   document.querySelectorAll('.palette-swatches .swatch').forEach(s => s.classList.remove('active'));
   browserCanvas.classList.remove('brush-active');
-  serverCanvas.classList.remove('brush-active');
-  brushToolbar.classList.remove('show');
+  brushCursor.style.display = 'none';
+  updateBrushPreview();
 }
 
 function selectBrush(swatchEl, color) {
@@ -1382,16 +1434,38 @@ function selectBrush(swatchEl, color) {
   activeBrush = color;
   swatchEl.classList.add('active');
   browserCanvas.classList.add('brush-active');
-  serverCanvas.classList.add('brush-active');
-  brushToolbar.classList.add('show');
+  updateBrushPreview();
+}
+
+function updateBrushPreview() {
+  if (!activeBrush) {
+    activeBrushPreview.innerHTML = '<span>No brush selected &mdash; click a swatch</span>';
+    return;
+  }
+  const swatch = document.createElement('div');
+  swatch.className = 'preview-swatch';
+  if (activeBrush.a === 0) {
+    swatch.classList.add('transparent');
+  } else {
+    swatch.style.background = `rgb(${activeBrush.r},${activeBrush.g},${activeBrush.b})`;
+  }
+  const label = activeBrush.a === 0 ? 'Transparent' : `rgb(${activeBrush.r}, ${activeBrush.g}, ${activeBrush.b})`;
+  activeBrushPreview.innerHTML = '';
+  activeBrushPreview.appendChild(swatch);
+  activeBrushPreview.appendChild(document.createTextNode(`${label} @ ${brushSize}px`));
 }
 
 function setBrushSize(size) {
   brushSize = size;
-  sizeBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.size) === size));
+  document.querySelectorAll('#sizeBtns .size-btn').forEach(b =>
+    b.classList.toggle('active', parseInt(b.dataset.size) === size)
+  );
+  updateBrushPreview();
 }
 
-sizeBtns.forEach(b => b.addEventListener('click', () => setBrushSize(parseInt(b.dataset.size))));
+document.querySelectorAll('#sizeBtns .size-btn').forEach(b =>
+  b.addEventListener('click', () => setBrushSize(parseInt(b.dataset.size)))
+);
 
 function buildSwatches(container, palette, source) {
   container.innerHTML = '';
@@ -1420,7 +1494,10 @@ function hexToRgb(hex) {
   return [parseInt(h.substring(0,2), 16), parseInt(h.substring(2,4), 16), parseInt(h.substring(4,6), 16)];
 }
 
-// --- Paint (left click) ---
+
+// ============================================================
+// Brush Cursor Preview
+// ============================================================
 
 function canvasToPixel(canvas, event) {
   const rect = canvas.getBoundingClientRect();
@@ -1430,22 +1507,73 @@ function canvasToPixel(canvas, event) {
   const cy = Math.floor((event.clientY - rect.top) * sy);
   const settings = getSettings();
   const ps = Math.round(canvas.width / settings.outputSize);
-  return { cx, cy, ps, outputSize: settings.outputSize };
+  return { cx, cy, ps, outputSize: settings.outputSize, rect, sx, sy };
 }
 
-function paintPixel(canvas, event) {
-  if (!activeBrush) return;
-  const { cx, cy, ps, outputSize } = canvasToPixel(canvas, event);
+function updateCursorPreview(event) {
+  if (!activeBrush) { brushCursor.style.display = 'none'; return; }
+
+  const rect = canvasWrap.getBoundingClientRect();
+  const canvasRect = browserCanvas.getBoundingClientRect();
+
+  // Canvas position relative to wrap
+  const canvasOffX = canvasRect.left - rect.left;
+  const canvasOffY = canvasRect.top - rect.top;
+
+  const sx = browserCanvas.width / canvasRect.width;
+  const sy = browserCanvas.height / canvasRect.height;
+  const rawX = (event.clientX - canvasRect.left) * sx;
+  const rawY = (event.clientY - canvasRect.top) * sy;
+
+  const settings = getSettings();
+  const ps = Math.round(browserCanvas.width / settings.outputSize);
   if (ps < 1) return;
 
-  const gx = Math.floor(cx / ps);
-  const gy = Math.floor(cy / ps);
-  const ctx = canvas.getContext('2d');
+  const gx = Math.floor(rawX / ps);
+  const gy = Math.floor(rawY / ps);
 
+  // Convert grid position back to CSS pixels relative to canvasWrap
+  const cssLeft = canvasOffX + (gx * ps) / sx;
+  const cssTop = canvasOffY + (gy * ps) / sy;
+  const cssWidth = (brushSize * ps) / sx;
+  const cssHeight = (brushSize * ps) / sy;
+
+  brushCursor.style.display = 'block';
+  brushCursor.style.left = cssLeft + 'px';
+  brushCursor.style.top = cssTop + 'px';
+  brushCursor.style.width = cssWidth + 'px';
+  brushCursor.style.height = cssHeight + 'px';
+
+  if (activeBrush.a === 0) {
+    brushCursor.classList.add('transparent-brush');
+  } else {
+    brushCursor.classList.remove('transparent-brush');
+    brushCursor.style.borderColor = `rgb(${activeBrush.r},${activeBrush.g},${activeBrush.b})`;
+  }
+}
+
+browserCanvas.addEventListener('mousemove', updateCursorPreview);
+browserCanvas.addEventListener('mouseleave', () => { brushCursor.style.display = 'none'; });
+
+
+// ============================================================
+// Paint — click and drag (left click)
+// ============================================================
+
+let isPainting = false;
+let lastPaintGrid = null;  // {gx, gy} to avoid repainting same cell
+let paintUndoPushed = false;
+
+function paintAt(canvas, gx, gy) {
+  const settings = getSettings();
+  const ps = Math.round(canvas.width / settings.outputSize);
+  if (ps < 1) return;
+
+  const ctx = canvas.getContext('2d');
   for (let dy = 0; dy < brushSize; dy++) {
     for (let dx = 0; dx < brushSize; dx++) {
       const tx = gx + dx, ty = gy + dy;
-      if (tx >= outputSize || ty >= outputSize) continue;
+      if (tx >= settings.outputSize || ty >= settings.outputSize || tx < 0 || ty < 0) continue;
       if (activeBrush.a === 0) {
         ctx.clearRect(tx * ps, ty * ps, ps, ps);
       } else {
@@ -1456,10 +1584,61 @@ function paintPixel(canvas, event) {
   }
 }
 
-browserCanvas.addEventListener('click', (e) => paintPixel(browserCanvas, e));
-serverCanvas.addEventListener('click', (e) => paintPixel(serverCanvas, e));
+function onPaintStart(event) {
+  if (!activeBrush || event.button !== 0) return;
+  event.preventDefault();
 
-// --- Flood fill (right click) ---
+  const { cx, cy, ps, outputSize } = canvasToPixel(browserCanvas, event);
+  if (ps < 1) return;
+  const gx = Math.floor(cx / ps);
+  const gy = Math.floor(cy / ps);
+
+  // Push undo once at start of stroke
+  pushUndo();
+  paintUndoPushed = true;
+  isPainting = true;
+  lastPaintGrid = { gx, gy };
+
+  paintAt(browserCanvas, gx, gy);
+}
+
+function onPaintMove(event) {
+  // Always update cursor preview
+  updateCursorPreview(event);
+
+  if (!isPainting || !activeBrush) return;
+
+  const { cx, cy, ps, outputSize } = canvasToPixel(browserCanvas, event);
+  if (ps < 1) return;
+  const gx = Math.floor(cx / ps);
+  const gy = Math.floor(cy / ps);
+
+  // Skip if same grid cell
+  if (lastPaintGrid && lastPaintGrid.gx === gx && lastPaintGrid.gy === gy) return;
+  lastPaintGrid = { gx, gy };
+
+  paintAt(browserCanvas, gx, gy);
+}
+
+function onPaintEnd() {
+  isPainting = false;
+  lastPaintGrid = null;
+  paintUndoPushed = false;
+}
+
+browserCanvas.addEventListener('mousedown', onPaintStart);
+browserCanvas.addEventListener('mousemove', onPaintMove);
+document.addEventListener('mouseup', onPaintEnd);
+
+// Prevent context menu default only when brush active
+browserCanvas.addEventListener('contextmenu', (e) => {
+  if (activeBrush) e.preventDefault();
+});
+
+
+// ============================================================
+// Flood fill (right click)
+// ============================================================
 
 function floodFill(canvas, event) {
   if (!activeBrush) return;
@@ -1470,6 +1649,8 @@ function floodFill(canvas, event) {
   const gx = Math.floor(cx / ps);
   const gy = Math.floor(cy / ps);
   if (gx < 0 || gx >= outputSize || gy < 0 || gy >= outputSize) return;
+
+  pushUndo();
 
   const ctx = canvas.getContext('2d');
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1525,12 +1706,19 @@ function floodFill(canvas, event) {
 }
 
 browserCanvas.addEventListener('contextmenu', (e) => floodFill(browserCanvas, e));
-serverCanvas.addEventListener('contextmenu', (e) => floodFill(serverCanvas, e));
 
-// --- Keyboard shortcuts ---
+
+// ============================================================
+// Keyboard shortcuts
+// ============================================================
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') clearBrush();
   if (e.key >= '1' && e.key <= '4' && activeBrush) setBrushSize(parseInt(e.key));
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    popUndo();
+  }
 });
 
 </script>
