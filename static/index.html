@@ -400,9 +400,14 @@
     background: repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%) 50% / 8px 8px !important;
   }
 
-  /* Undo button */
-  .undo-btn {
-    width: 100%;
+  /* History buttons (undo/redo) */
+  .history-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .history-btn {
+    flex: 1;
     padding: 8px 12px;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -418,15 +423,46 @@
     transition: all 0.2s;
   }
 
-  .undo-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); }
-  .undo-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .history-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); }
+  .history-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  .undo-count {
+  .history-count {
     font-size: 10px;
     background: var(--bg3);
     padding: 1px 5px;
     border-radius: 3px;
     color: var(--text-dim);
+  }
+
+  /* Eyedropper tool */
+  .tool-btn {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    width: 100%;
+  }
+
+  .tool-btn:hover { border-color: var(--accent); background: rgba(233, 69, 96, 0.15); }
+
+  .tool-btn.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #000;
+  }
+
+  .tool-btn svg { flex-shrink: 0; }
+
+  .canvas-wrap canvas.eyedropper-active {
+    cursor: crosshair;
   }
 
   /* Shortcuts reference */
@@ -640,10 +676,28 @@
     </div>
 
     <div>
-      <div class="panel-title">Undo</div>
-      <button class="undo-btn" id="btnUndo" disabled>
-        Undo <span class="undo-count" id="undoCount">0</span>
+      <div class="panel-title">Tools</div>
+      <button class="tool-btn" id="btnEyedropper">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M2 22l1-1h3l9-9"/>
+          <path d="M3 21l9-9"/>
+          <circle cx="17" cy="7" r="3"/>
+          <path d="M20 4l1-1"/>
+        </svg>
+        Eyedropper
       </button>
+    </div>
+
+    <div>
+      <div class="panel-title">History</div>
+      <div class="history-row">
+        <button class="history-btn" id="btnUndo" disabled>
+          Undo <span class="history-count" id="undoCount">0</span>
+        </button>
+        <button class="history-btn" id="btnRedo" disabled>
+          Redo <span class="history-count" id="redoCount">0</span>
+        </button>
+      </div>
     </div>
 
     <div>
@@ -652,6 +706,8 @@
         <kbd>1</kbd>&ndash;<kbd>4</kbd> Brush size<br>
         <kbd>Esc</kbd> Deselect brush<br>
         <kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo<br>
+        <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> Redo<br>
+        <kbd>Ctrl</kbd>+click Eyedropper<br>
         <b>Left click</b> &mdash; Paint<br>
         <b>Click + drag</b> &mdash; Stroke<br>
         <b>Right click</b> &mdash; Flood fill
@@ -1192,8 +1248,11 @@ const browserSpinner = document.getElementById('browserSpinner');
 const canvasWrap = document.getElementById('canvasWrap');
 const brushCursor = document.getElementById('brushCursor');
 const btnUndo = document.getElementById('btnUndo');
+const btnRedo = document.getElementById('btnRedo');
 const undoCountEl = document.getElementById('undoCount');
+const redoCountEl = document.getElementById('redoCount');
 const activeBrushPreview = document.getElementById('activeBrushPreview');
+const btnEyedropper = document.getElementById('btnEyedropper');
 
 let currentFile = null;
 let browserResult = null;
@@ -1265,6 +1324,7 @@ function scheduleRerun() {
   clearTimeout(_rerunTimer);
   _rerunTimer = setTimeout(() => {
     pushUndo();
+    clearRedo();
     runBrowserPipeline(currentFile);
   }, 80);
 }
@@ -1299,9 +1359,10 @@ async function handleFile(file) {
   const url = URL.createObjectURL(file);
   sourcePreview.innerHTML = `<img src="${url}" alt="Source">`;
 
-  // Clear undo stack on new image
+  // Clear undo/redo stacks on new image
   undoStack.length = 0;
-  updateUndoUI();
+  redoStack.length = 0;
+  updateHistoryUI();
 
   // Run browser pipeline immediately
   await runBrowserPipeline(file);
@@ -1375,42 +1436,69 @@ btnDownload.addEventListener('click', () => {
 
 
 // ============================================================
-// Undo System
+// Undo / Redo System
 // ============================================================
 
-const MAX_UNDO = 50;
+const MAX_HISTORY = 50;
 const undoStack = [];
+const redoStack = [];
 
-function pushUndo() {
-  if (!browserCanvas.width || !browserCanvas.height) return;
+function snapshotCanvas() {
   const ctx = browserCanvas.getContext('2d');
-  const snapshot = ctx.getImageData(0, 0, browserCanvas.width, browserCanvas.height);
-  undoStack.push({
-    imageData: snapshot,
+  return {
+    imageData: ctx.getImageData(0, 0, browserCanvas.width, browserCanvas.height),
     width: browserCanvas.width,
     height: browserCanvas.height,
-  });
-  if (undoStack.length > MAX_UNDO) undoStack.shift();
-  updateUndoUI();
+  };
 }
 
-function popUndo() {
-  if (undoStack.length === 0) return;
-  const state = undoStack.pop();
+function restoreSnapshot(state) {
   browserCanvas.width = state.width;
   browserCanvas.height = state.height;
   const ctx = browserCanvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.putImageData(state.imageData, 0, 0);
-  updateUndoUI();
 }
 
-function updateUndoUI() {
+function pushUndo() {
+  if (!browserCanvas.width || !browserCanvas.height) return;
+  undoStack.push(snapshotCanvas());
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  updateHistoryUI();
+}
+
+function clearRedo() {
+  redoStack.length = 0;
+  updateHistoryUI();
+}
+
+function popUndo() {
+  if (undoStack.length === 0) return;
+  // Save current state to redo before restoring
+  redoStack.push(snapshotCanvas());
+  if (redoStack.length > MAX_HISTORY) redoStack.shift();
+  restoreSnapshot(undoStack.pop());
+  updateHistoryUI();
+}
+
+function popRedo() {
+  if (redoStack.length === 0) return;
+  // Save current state to undo before restoring
+  undoStack.push(snapshotCanvas());
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  restoreSnapshot(redoStack.pop());
+  updateHistoryUI();
+}
+
+function updateHistoryUI() {
   btnUndo.disabled = undoStack.length === 0;
   undoCountEl.textContent = undoStack.length;
+  btnRedo.disabled = redoStack.length === 0;
+  redoCountEl.textContent = redoStack.length;
 }
 
 btnUndo.addEventListener('click', popUndo);
+btnRedo.addEventListener('click', popRedo);
 
 
 // ============================================================
@@ -1511,7 +1599,7 @@ function canvasToPixel(canvas, event) {
 }
 
 function updateCursorPreview(event) {
-  if (!activeBrush) { brushCursor.style.display = 'none'; return; }
+  if (!activeBrush || ctrlHeld || eyedropperActive) { brushCursor.style.display = 'none'; return; }
 
   const rect = canvasWrap.getBoundingClientRect();
   const canvasRect = browserCanvas.getBoundingClientRect();
@@ -1585,7 +1673,16 @@ function paintAt(canvas, gx, gy) {
 }
 
 function onPaintStart(event) {
-  if (!activeBrush || event.button !== 0) return;
+  if (event.button !== 0) return;
+
+  // Ctrl+click = eyedropper
+  if (event.ctrlKey || event.metaKey || eyedropperActive) {
+    event.preventDefault();
+    pickColor(browserCanvas, event);
+    return;
+  }
+
+  if (!activeBrush) return;
   event.preventDefault();
 
   const { cx, cy, ps, outputSize } = canvasToPixel(browserCanvas, event);
@@ -1595,6 +1692,7 @@ function onPaintStart(event) {
 
   // Push undo once at start of stroke
   pushUndo();
+  clearRedo();
   paintUndoPushed = true;
   isPainting = true;
   lastPaintGrid = { gx, gy };
@@ -1603,8 +1701,12 @@ function onPaintStart(event) {
 }
 
 function onPaintMove(event) {
-  // Always update cursor preview
-  updateCursorPreview(event);
+  // Update cursor preview (skip if in eyedropper mode)
+  if (ctrlHeld || eyedropperActive) {
+    brushCursor.style.display = 'none';
+  } else {
+    updateCursorPreview(event);
+  }
 
   if (!isPainting || !activeBrush) return;
 
@@ -1630,12 +1732,6 @@ browserCanvas.addEventListener('mousedown', onPaintStart);
 browserCanvas.addEventListener('mousemove', onPaintMove);
 document.addEventListener('mouseup', onPaintEnd);
 
-// Prevent context menu default only when brush active
-browserCanvas.addEventListener('contextmenu', (e) => {
-  if (activeBrush) e.preventDefault();
-});
-
-
 // ============================================================
 // Flood fill (right click)
 // ============================================================
@@ -1651,6 +1747,7 @@ function floodFill(canvas, event) {
   if (gx < 0 || gx >= outputSize || gy < 0 || gy >= outputSize) return;
 
   pushUndo();
+  clearRedo();
 
   const ctx = canvas.getContext('2d');
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1709,15 +1806,116 @@ browserCanvas.addEventListener('contextmenu', (e) => floodFill(browserCanvas, e)
 
 
 // ============================================================
-// Keyboard shortcuts
+// Eyedropper Tool
+// ============================================================
+
+let eyedropperActive = false;
+let ctrlHeld = false;
+let savedBrushSize = null;  // stash brush size while Ctrl held
+
+function setEyedropperActive(active) {
+  eyedropperActive = active;
+  btnEyedropper.classList.toggle('active', active);
+  browserCanvas.classList.toggle('eyedropper-active', active || ctrlHeld);
+  if (active || ctrlHeld) {
+    brushCursor.style.display = 'none';
+  }
+}
+
+btnEyedropper.addEventListener('click', () => {
+  setEyedropperActive(!eyedropperActive);
+});
+
+function pickColor(canvas, event) {
+  const { cx, cy, ps, outputSize } = canvasToPixel(canvas, event);
+  if (ps < 1) return;
+  const gx = Math.floor(cx / ps);
+  const gy = Math.floor(cy / ps);
+  if (gx < 0 || gx >= outputSize || gy < 0 || gy >= outputSize) return;
+
+  const ctx = canvas.getContext('2d');
+  // Sample center of the pixel block
+  const sampleX = gx * ps + Math.floor(ps / 2);
+  const sampleY = gy * ps + Math.floor(ps / 2);
+  const pixel = ctx.getImageData(sampleX, sampleY, 1, 1).data;
+
+  const color = pixel[3] === 0
+    ? { r: 0, g: 0, b: 0, a: 0 }
+    : { r: pixel[0], g: pixel[1], b: pixel[2], a: 255 };
+
+  // Find matching swatch and select it, or create a virtual selection
+  const swatches = document.querySelectorAll('#browserSwatches .swatch');
+  let matched = false;
+  for (const s of swatches) {
+    const bg = s.style.background;
+    if (color.a === 0 && s.classList.contains('transparent')) {
+      selectBrush(s, color);
+      matched = true;
+      break;
+    }
+    if (color.a !== 0 && bg === `rgb(${color.r}, ${color.g}, ${color.b})`) {
+      selectBrush(s, color);
+      matched = true;
+      break;
+    }
+  }
+  if (!matched) {
+    // Color not in palette — set brush directly without a swatch
+    clearBrush();
+    activeBrush = color;
+    browserCanvas.classList.add('brush-active');
+    updateBrushPreview();
+  }
+
+  // Turn off eyedropper tool after picking (unless Ctrl is still held)
+  if (!ctrlHeld) {
+    setEyedropperActive(false);
+  }
+}
+
+
+// ============================================================
+// Keyboard shortcuts + Ctrl modifier for eyedropper
 // ============================================================
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') clearBrush();
-  if (e.key >= '1' && e.key <= '4' && activeBrush) setBrushSize(parseInt(e.key));
+  if (e.key === 'Escape') {
+    clearBrush();
+    setEyedropperActive(false);
+  }
+  if (e.key >= '1' && e.key <= '4' && activeBrush && !ctrlHeld) {
+    setBrushSize(parseInt(e.key));
+  }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z') {
+    e.preventDefault();
+    popRedo();
+    return;
+  }
   if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
     e.preventDefault();
     popUndo();
+    return;
+  }
+  // Ctrl hold → temporary eyedropper mode
+  if ((e.key === 'Control' || e.key === 'Meta') && !ctrlHeld) {
+    ctrlHeld = true;
+    savedBrushSize = brushSize;
+    browserCanvas.classList.add('eyedropper-active');
+    brushCursor.style.display = 'none';
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if ((e.key === 'Control' || e.key === 'Meta') && ctrlHeld) {
+    ctrlHeld = false;
+    browserCanvas.classList.remove('eyedropper-active');
+    if (!eyedropperActive) {
+      // Restore brush cursor behavior
+      if (savedBrushSize !== null) {
+        setBrushSize(savedBrushSize);
+        savedBrushSize = null;
+      }
+    }
   }
 });
 
