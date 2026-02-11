@@ -286,6 +286,27 @@
     height: 14px;
     border-radius: 2px;
     border: 1px solid rgba(255,255,255,0.1);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  .palette-swatches .swatch:hover {
+    transform: scale(1.3);
+    border-color: rgba(255,255,255,0.4);
+  }
+
+  .palette-swatches .swatch.active {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    transform: scale(1.3);
+  }
+
+  .palette-swatches .swatch.transparent {
+    background: repeating-conic-gradient(#808080 0% 25%, #c0c0c0 0% 50%) 50% / 8px 8px !important;
+  }
+
+  .canvas-wrap canvas.brush-active {
+    cursor: crosshair;
   }
 
   .download-row {
@@ -1166,15 +1187,9 @@ async function runBrowserPipeline(file) {
     document.getElementById('browserTime').textContent = `${result.processingMs}ms`;
     document.getElementById('browserColorCount').textContent = result.palette.length;
 
-    // Swatches
-    const swatches = document.getElementById('browserSwatches');
-    swatches.innerHTML = '';
-    for (const c of result.palette) {
-      const s = document.createElement('div');
-      s.className = 'swatch';
-      s.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
-      swatches.appendChild(s);
-    }
+    // Swatches (clickable for brush)
+    clearBrush();
+    buildSwatches(document.getElementById('browserSwatches'), result.palette, 'rgb');
 
     browserDot.className = 'dot active';
     browserResult = browserCanvas;
@@ -1238,15 +1253,9 @@ btnGenerate.addEventListener('click', async () => {
     const colors = paletteHex.split(',').filter(Boolean);
     document.getElementById('serverColorCount').textContent = colors.length;
 
-    // Swatches
-    const swatches = document.getElementById('serverSwatches');
-    swatches.innerHTML = '';
-    for (const hex of colors) {
-      const s = document.createElement('div');
-      s.className = 'swatch';
-      s.style.background = hex;
-      swatches.appendChild(s);
-    }
+    // Swatches (clickable for brush)
+    clearBrush();
+    buildSwatches(document.getElementById('serverSwatches'), colors, 'hex');
 
     serverDot.className = 'dot active';
     serverResult = serverCanvas;
@@ -1282,6 +1291,88 @@ btnDownloadBoth.addEventListener('click', () => {
   if (browserResult) downloadCanvas(browserResult, 'portrait-browser.png');
   if (serverResult) setTimeout(() => downloadCanvas(serverResult, 'portrait-server.png'), 100);
 });
+
+// ============================================================
+// Pixel Brush — click palette swatch to paint on canvas
+// ============================================================
+
+let activeBrush = null; // null | {r,g,b,a} where a=0 means transparent
+
+function clearBrush() {
+  activeBrush = null;
+  document.querySelectorAll('.palette-swatches .swatch').forEach(s => s.classList.remove('active'));
+  browserCanvas.classList.remove('brush-active');
+  serverCanvas.classList.remove('brush-active');
+}
+
+function selectBrush(swatchEl, color) {
+  // Toggle off if same swatch clicked again
+  if (swatchEl.classList.contains('active')) { clearBrush(); return; }
+  clearBrush();
+  activeBrush = color;
+  swatchEl.classList.add('active');
+  browserCanvas.classList.add('brush-active');
+  serverCanvas.classList.add('brush-active');
+}
+
+function buildSwatches(container, palette, source) {
+  container.innerHTML = '';
+  for (const c of palette) {
+    const s = document.createElement('div');
+    s.className = 'swatch';
+    if (source === 'hex') {
+      s.style.background = c;
+      const rgb = hexToRgb(c);
+      s.addEventListener('click', () => selectBrush(s, {r: rgb[0], g: rgb[1], b: rgb[2], a: 255}));
+    } else {
+      s.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+      s.addEventListener('click', () => selectBrush(s, {r: c[0], g: c[1], b: c[2], a: 255}));
+    }
+    container.appendChild(s);
+  }
+  // Always add a transparent brush
+  const ts = document.createElement('div');
+  ts.className = 'swatch transparent';
+  ts.title = 'Transparent';
+  ts.addEventListener('click', () => selectBrush(ts, {r: 0, g: 0, b: 0, a: 0}));
+  container.appendChild(ts);
+}
+
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [parseInt(h.substring(0,2), 16), parseInt(h.substring(2,4), 16), parseInt(h.substring(4,6), 16)];
+}
+
+function paintPixel(canvas, event) {
+  if (!activeBrush) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const cx = Math.floor((event.clientX - rect.left) * scaleX);
+  const cy = Math.floor((event.clientY - rect.top) * scaleY);
+
+  // Determine pixel-art scale from canvas size
+  const settings = getSettings();
+  const pixelScale = Math.round(canvas.width / settings.outputSize);
+  if (pixelScale < 1) return;
+
+  const px = Math.floor(cx / pixelScale) * pixelScale;
+  const py = Math.floor(cy / pixelScale) * pixelScale;
+
+  const ctx = canvas.getContext('2d');
+  if (activeBrush.a === 0) {
+    ctx.clearRect(px, py, pixelScale, pixelScale);
+  } else {
+    ctx.fillStyle = `rgb(${activeBrush.r},${activeBrush.g},${activeBrush.b})`;
+    ctx.fillRect(px, py, pixelScale, pixelScale);
+  }
+}
+
+browserCanvas.addEventListener('click', (e) => paintPixel(browserCanvas, e));
+serverCanvas.addEventListener('click', (e) => paintPixel(serverCanvas, e));
+
+// Escape key clears brush
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') clearBrush(); });
 
 </script>
 </body>
