@@ -1,0 +1,63 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate Docker build
+        run: docker build -t portrait-generator-test .
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Staging
+        run: railway up --service portrait-generator --environment staging --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.PORTRAIT_STAGING }}
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Production
+        run: railway up --service portrait-generator --environment production --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.PORTRAIT_PRODUCTION }}

@@ -62,6 +62,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Frame embedding middleware — allows iframe embedding from ALLOW_EMBED_ORIGIN
+if settings.allow_embed_origin:
+
+    @app.middleware("http")
+    async def frame_embedding_headers(request, call_next):
+        response = await call_next(request)
+        origin = settings.allow_embed_origin
+        response.headers["Content-Security-Policy"] = f"frame-ancestors 'self' {origin}"
+        # X-Frame-Options doesn't support multiple origins; CSP frame-ancestors is the
+        # modern replacement, so we omit X-Frame-Options when embedding is enabled.
+        return response
+
 # Concurrency control
 _semaphore = asyncio.Semaphore(settings.max_concurrent_requests)
 

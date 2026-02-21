@@ -19,6 +19,14 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  /* Embed mode: constrain UI for iframe integration */
+  body.embed-mode header { display: none; }
+  body.embed-mode .status-bar { display: none; }
+  body.embed-mode .sidebar .section.settings-section .control.embed-hide { display: none; }
+  body.embed-mode .sidebar .section.download-section { display: none; }
+  body.embed-mode .sidebar .section.save-section { display: block; }
+  .sidebar .section.save-section { display: none; }
+
   body {
     font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
     background: var(--bg);
@@ -853,10 +861,10 @@
     </div>
 
     <!-- Settings -->
-    <div class="section">
+    <div class="section settings-section">
       <div class="section-title">Settings</div>
 
-      <div class="control">
+      <div class="control embed-hide">
         <label>Output Size</label>
         <select id="outputSize">
           <option value="32">32 &times; 32</option>
@@ -867,7 +875,7 @@
         </select>
       </div>
 
-      <div class="control">
+      <div class="control embed-hide">
         <label>Colors</label>
         <select id="paletteColors">
           <option value="8">8</option>
@@ -878,7 +886,7 @@
         </select>
       </div>
 
-      <div class="control">
+      <div class="control embed-hide">
         <label>Palette</label>
         <select id="paletteName">
           <option value="">Auto (derived)</option>
@@ -895,7 +903,7 @@
         </select>
       </div>
 
-      <div class="control">
+      <div class="control embed-hide">
         <label>SNES Snap</label>
         <input type="checkbox" id="snesSnap" checked>
       </div>
@@ -911,7 +919,7 @@
         <span class="value" id="bgThresholdVal">0.5</span>
       </div>
 
-      <div class="control">
+      <div class="control embed-hide">
         <label>Export Scale</label>
         <select id="scale">
           <option value="4">4&times;</option>
@@ -923,12 +931,18 @@
 
     </div>
 
-    <!-- Download -->
-    <div class="section">
+    <!-- Download (hidden in embed mode) -->
+    <div class="section download-section">
       <div class="download-row">
         <button class="btn primary" id="btnDownload" style="flex:1" disabled>Download PNG</button>
         <button class="btn" id="btnDownloadAll" style="flex:1" disabled>All Sizes</button>
       </div>
+    </div>
+
+    <!-- Save Portrait (shown only in embed mode) -->
+    <div class="section save-section">
+      <button class="btn primary" id="btnSavePortrait" style="width:100%" disabled>Save Portrait</button>
+      <button class="btn" id="btnCancelEmbed" style="width:100%; margin-top:8px">Cancel</button>
     </div>
   </div>
 
@@ -2100,6 +2114,7 @@ async function handleFile(file) {
   detectedCrop = await portrait.detectFace(file);
   if (detectedCrop) {
     cropControls.classList.add('visible');
+    // Wait for image to load in DOM before drawing overlay
     const imgEl = sourcePreview.querySelector('img');
     if (imgEl.complete) {
       drawCropOverlay();
@@ -2667,6 +2682,79 @@ function pickColor(canvas, event) {
   if (!ctrlHeld) {
     setEyedropperActive(false);
   }
+}
+
+
+// ============================================================
+// Embed Mode (iframe integration with parent app)
+// ============================================================
+
+const embedParams = new URLSearchParams(window.location.search);
+const isEmbedMode = embedParams.get('mode') === 'embed';
+
+if (isEmbedMode) {
+  document.body.classList.add('embed-mode');
+
+  // Apply SNES-appropriate presets
+  document.getElementById('outputSize').value = '64';
+  document.getElementById('paletteColors').value = '16';
+  document.getElementById('snesSnap').checked = true;
+  document.getElementById('removeBg').checked = true;
+  document.getElementById('dither').value = 'bayer2x2';
+  document.getElementById('scale').value = '8';
+
+  // Lock palette if specified
+  const embedPalette = embedParams.get('palette');
+  if (embedPalette) {
+    document.getElementById('paletteName').value = embedPalette;
+  }
+
+  // Save Portrait button
+  document.getElementById('btnSavePortrait').addEventListener('click', () => {
+    if (!browserResult) return;
+
+    // Extract the raw 64x64 pixel art (not the upscaled display canvas)
+    const outputSize = parseInt(document.getElementById('outputSize').value);
+    const rawCanvas = document.createElement('canvas');
+    rawCanvas.width = outputSize;
+    rawCanvas.height = outputSize;
+    const rawCtx = rawCanvas.getContext('2d');
+    rawCtx.imageSmoothingEnabled = false;
+    rawCtx.drawImage(browserCanvas, 0, 0, outputSize, outputSize);
+
+    const dataUrl = rawCanvas.toDataURL('image/png');
+    window.parent.postMessage({
+      type: 'portrait-complete',
+      data: dataUrl,
+    }, '*');
+  });
+
+  // Cancel button
+  document.getElementById('btnCancelEmbed').addEventListener('click', () => {
+    window.parent.postMessage({ type: 'portrait-cancel' }, '*');
+  });
+
+  // Enable Save button when portrait is generated (hook into existing pipeline)
+  const _origOnPipelineSuccess = () => {
+    document.getElementById('btnSavePortrait').disabled = false;
+  };
+  // Observe the browserDot class change to detect pipeline completion
+  const observer = new MutationObserver(() => {
+    if (browserDot.classList.contains('active')) {
+      document.getElementById('btnSavePortrait').disabled = false;
+    }
+  });
+  observer.observe(browserDot, { attributes: true, attributeFilter: ['class'] });
+
+  // Listen for init messages from parent
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'portrait-init') {
+      // Parent can send context (e.g., contact name for title)
+      if (e.data.contactName) {
+        document.title = `Portrait: ${e.data.contactName}`;
+      }
+    }
+  });
 }
 
 

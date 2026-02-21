@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     max_concurrent_requests: int = Field(default=2, alias="MAX_CONCURRENT_REQUESTS")
     log_level: str = Field(default="info", alias="LOG_LEVEL")
     cors_origins: str = Field(default="*", alias="CORS_ORIGINS")
+    allow_embed_origin: str = Field(default="", alias="ALLOW_EMBED_ORIGIN")
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
