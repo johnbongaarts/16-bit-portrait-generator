@@ -40,7 +40,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Staging
-        run: railway up --service portrait-generator --environment staging --detach
+        run: railway up --service 16-bit-portrait-generator --environment staging --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.PORTRAIT_STAGING }}
 
@@ -58,6 +58,6 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Production
-        run: railway up --service portrait-generator --environment production --detach
+        run: railway up --service 16-bit-portrait-generator --environment production --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.PORTRAIT_PRODUCTION }}
