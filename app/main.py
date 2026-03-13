@@ -52,27 +52,35 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS
-origins = settings.cors_origins.split(",") if settings.cors_origins != "*" else ["*"]
+# CORS — restrict to CRM domain(s) when configured, fall back to CORS_ORIGINS setting.
+if settings.cors_origins != "*":
+    _cors_origins = settings.cors_origins.split(",")
+elif settings.allowed_frame_ancestors:
+    _cors_origins = settings.allowed_frame_ancestors.split()
+else:
+    _cors_origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
 
 
-# Frame embedding middleware — allows iframe embedding from ALLOW_EMBED_ORIGIN
-if settings.allow_embed_origin:
+# Frame embedding middleware — restricts which domains can embed this app in an iframe.
+# ALLOWED_FRAME_ANCESTORS can contain multiple space-separated origins.
+if settings.allowed_frame_ancestors:
 
     @app.middleware("http")
     async def frame_embedding_headers(request, call_next):
         response = await call_next(request)
-        origin = settings.allow_embed_origin
-        response.headers["Content-Security-Policy"] = f"frame-ancestors 'self' {origin}"
-        # X-Frame-Options doesn't support multiple origins; CSP frame-ancestors is the
-        # modern replacement, so we omit X-Frame-Options when embedding is enabled.
+        ancestors = settings.allowed_frame_ancestors
+        response.headers["Content-Security-Policy"] = f"frame-ancestors 'self' {ancestors}"
+        # X-Frame-Options only supports a single origin and is deprecated, but included
+        # for older browser compatibility. Use the first origin from the list.
+        first_origin = ancestors.split()[0]
+        response.headers["X-Frame-Options"] = f"ALLOW-FROM {first_origin}"
         return response
 
 # Concurrency control

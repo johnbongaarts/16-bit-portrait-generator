@@ -2691,6 +2691,8 @@ function pickColor(canvas, event) {
 
 const embedParams = new URLSearchParams(window.location.search);
 const isEmbedMode = embedParams.get('mode') === 'embed';
+// Derive parent origin from referrer for secure postMessage targeting
+const parentOrigin = document.referrer ? new URL(document.referrer).origin : '*';
 
 if (isEmbedMode) {
   document.body.classList.add('embed-mode');
@@ -2726,12 +2728,12 @@ if (isEmbedMode) {
     window.parent.postMessage({
       type: 'portrait-complete',
       data: dataUrl,
-    }, '*');
+    }, parentOrigin);
   });
 
   // Cancel button
   document.getElementById('btnCancelEmbed').addEventListener('click', () => {
-    window.parent.postMessage({ type: 'portrait-cancel' }, '*');
+    window.parent.postMessage({ type: 'portrait-cancel' }, parentOrigin);
   });
 
   // Enable Save button when portrait is generated (hook into existing pipeline)
