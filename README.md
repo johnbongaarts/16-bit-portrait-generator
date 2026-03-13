@@ -92,19 +92,6 @@ Health check with GPU status.
 
 ## Test UI Features
 
-The single-page test UI (`static/index.html`) provides a complete portrait creation workflow.
-
-### Four-Panel Layout
-
-| Panel | Position | Purpose |
-|-------|----------|---------|
-| **Sidebar** | Left (280px) | Source image upload/capture, all generation settings, export/download |
-| **Canvas** | Center (flexible) | Portrait preview with pixel-perfect rendering, brush cursor overlay |
-| **Retouch** | Right rail (260px, collapsible) | Palette swatches, brush size, eyedropper, flood fill, undo/redo history |
-| **File Organizer** | Far right rail (260px, collapsible) | Structured file naming and save-to-directory |
-
-Both right-rail panels collapse horizontally to a 36px vertical strip with a rotated label, giving the canvas more room. Click the strip to expand.
-
 ### Export & Download
 
 - **Output Size** controls the pixel-art grid resolution (e.g. 64×64). **Export Scale** controls the nearest-neighbor upscale factor for the final PNG (4×, 8×, 12×, or 16×). A 64px portrait at 8× exports as 512×512.
@@ -136,31 +123,6 @@ Adjustments re-render the portrait in real time. The crop override bypasses re-r
 - **Flood fill** — right-click to fill connected regions of the same color
 - **Eyedropper** — Ctrl+click or toggle button to pick colors from the canvas
 - **Undo/Redo** — up to 50 history states (Ctrl+Z / Ctrl+Shift+Z)
-
-### File Organizer
-
-A structured save panel for organizing generated portraits with descriptive filenames.
-
-**Inputs:**
-- **Save Directory** — select a folder via the File System Access API (Chrome/Edge); falls back to standard browser download on unsupported browsers
-- **Root File Name** — auto-populated from the source filename + `_16bit` (e.g., `IMG_4523_16bit`), editable
-
-**Filename checkboxes** — toggle which current settings to append to the filename. Each setting is aggressively abbreviated:
-
-| Setting | Abbreviation | Example |
-|---------|-------------|---------|
-| Output Size | raw number | `64` |
-| Colors | number + `c` | `16c` |
-| Palette | short code | `CT`, `FF6`, `Jk32`, `SNW`, `SNC`, `Auto` |
-| Dither | short code | `ND`, `B2`, `B4`, `FS` |
-| SNES Snap | `SNES` | only when enabled |
-| Remove BG | `NoBG` + threshold | `NoBG50` (only when enabled) |
-| Scale | number + `x` | `8x` |
-| Retouched | `RTd` | only when canvas has been hand-edited |
-
-**Example filename:** `IMG_4523_16bit_64_16c_CT_SNES_RTd.png`
-
-**Retouch dirty tracking:** A visual "dirty dot" indicator tracks whether the canvas has been modified with retouch tools since the last algorithm run. The `RTd` suffix only appears when the retouched checkbox is checked AND the canvas is actually dirty. Undoing all retouch changes back to the original algorithm output clears the dirty state (verified via pixel-level comparison against a stored snapshot).
 
 ## Pipeline Architecture
 
@@ -212,16 +174,21 @@ portrait-generator/
 │   ├── config.py            # Settings from env vars
 │   ├── pipeline/            # Processing pipeline modules
 │   │   ├── face_detect.py   # MediaPipe face detection
+│   │   ├── identity.py      # InsightFace embeddings
+│   │   ├── generate.py      # SDXL generation
 │   │   ├── downscale.py     # Nearest-neighbor downscale
 │   │   ├── quantize.py      # OkLab k-means quantization
-│   │   ├── postprocess.py   # Eye highlights, cleanup, dither, upscale
-│   │   └── fallback.py      # Algorithmic pipeline orchestrator
-│   └── palettes/            # Color palette system
-│       ├── loader.py        # Palette JSON loading
-│       ├── snes_snap.py     # 15-bit color snapping
-│       └── data/            # Palette JSON files (5 built-in)
+│   │   ├── postprocess.py   # Eye highlights, cleanup, upscale
+│   │   ├── fallback.py      # Algorithmic pipeline
+│   │   └── orchestrator.py  # Pipeline orchestration
+│   ├── palettes/            # Color palette system
+│   │   ├── loader.py        # Palette JSON loading
+│   │   ├── snes_snap.py     # 15-bit color snapping
+│   │   └── data/            # Palette JSON files
+│   └── models/
+│       └── loader.py        # Model initialization
 ├── static/
-│   └── index.html           # Full UI: pipeline + retouch + file organizer
+│   └── index.html           # Test UI (single file)
 ├── scripts/
 │   └── download_models.py   # Model weight downloader
 ├── tests/                   # Unit + integration tests
