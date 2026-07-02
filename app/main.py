@@ -53,8 +53,10 @@ app = FastAPI(
 )
 
 # CORS — restrict to CRM domain(s) when configured, fall back to CORS_ORIGINS setting.
+# Strip each origin: env values pasted into hosting dashboards often carry stray
+# whitespace/newlines, which would silently never match a real Origin header.
 if settings.cors_origins != "*":
-    _cors_origins = settings.cors_origins.split(",")
+    _cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 elif settings.allowed_frame_ancestors:
     _cors_origins = settings.allowed_frame_ancestors.split()
 else:
@@ -75,12 +77,17 @@ if settings.allowed_frame_ancestors:
     @app.middleware("http")
     async def frame_embedding_headers(request, call_next):
         response = await call_next(request)
-        ancestors = settings.allowed_frame_ancestors
+        # Collapse any stray whitespace/newlines from the env value. A trailing
+        # newline (easy to introduce when pasting into a hosting dashboard) makes
+        # the header value illegal, and uvicorn raises "Invalid HTTP header value"
+        # — which fails EVERY response with a broken reply / 502 at the proxy.
+        ancestors = " ".join(settings.allowed_frame_ancestors.split())
+        if not ancestors:
+            return response
         response.headers["Content-Security-Policy"] = f"frame-ancestors 'self' {ancestors}"
         # X-Frame-Options only supports a single origin and is deprecated, but included
         # for older browser compatibility. Use the first origin from the list.
-        first_origin = ancestors.split()[0]
-        response.headers["X-Frame-Options"] = f"ALLOW-FROM {first_origin}"
+        response.headers["X-Frame-Options"] = f"ALLOW-FROM {ancestors.split()[0]}"
         return response
 
 # Concurrency control
