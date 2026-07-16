@@ -2966,8 +2966,18 @@ if (isEmbedMode) {
   let allowedOrigins = null;          // null = allowlist not loaded yet
   const pendingMessages = [];
 
+  // Compare origins the way browsers actually compare them — by canonical
+  // origin. event.origin is always a bare origin (no path, no trailing slash),
+  // but ALLOWED_FRAME_ANCESTORS is a hand-edited env var: a stray trailing
+  // slash / path / explicit default port there still lets the iframe load
+  // (browsers are lenient on frame-ancestors) yet would fail a raw string
+  // compare and silently drop every inbound message. Normalize both sides.
+  function normalizeOrigin(o) {
+    try { return new URL(o).origin; } catch (_) { return String(o).trim().replace(/\/+$/, ''); }
+  }
+
   function isAllowedOrigin(origin) {
-    return Array.isArray(allowedOrigins) && allowedOrigins.includes(origin);
+    return Array.isArray(allowedOrigins) && allowedOrigins.includes(normalizeOrigin(origin));
   }
 
   function handleEmbedMessage(event) {
@@ -2988,12 +2998,15 @@ if (isEmbedMode) {
         (event.source || window.parent).postMessage({ type: 'portrait-ready' }, event.origin);
       } catch (_) { /* ignore — reply is best-effort */ }
     } else if (data.type === 'portrait-load') {
-      if (typeof data.data === 'string' && /^data:image\//.test(data.data)) {
+      const src = data.data;
+      if (typeof src === 'string' && /^data:image\//i.test(src)) {
         // pixelated defaults to true unless explicitly false.
-        loadPortraitIntoEditor(data.data, { pixelated: data.pixelated !== false })
+        loadPortraitIntoEditor(src, { pixelated: data.pixelated !== false })
+          .then(() => console.info('[embed] portrait-load applied'))
           .catch(err => console.error('[embed] Failed to load portrait:', err));
       } else {
-        console.warn('[embed] portrait-load ignored: missing/invalid image data URL');
+        console.warn('[embed] portrait-load ignored — data is not an image data URL. typeof=%s prefix=%s',
+          typeof src, typeof src === 'string' ? src.slice(0, 40) : String(src));
       }
     }
   }
@@ -3008,7 +3021,7 @@ if (isEmbedMode) {
       return;
     }
     if (!isAllowedOrigin(event.origin)) {
-      console.warn('[embed] Ignoring message from disallowed origin:', event.origin);
+      console.warn('[embed] Ignoring message from disallowed origin:', event.origin, '— allowed:', allowedOrigins);
       return;
     }
     handleEmbedMessage(event);
@@ -3021,17 +3034,19 @@ if (isEmbedMode) {
   fetch('/api/embed-config')
     .then(r => r.json())
     .then(cfg => {
-      allowedOrigins = [location.origin, ...(cfg.allowedOrigins || [])];
+      allowedOrigins = [location.origin, ...(cfg.allowedOrigins || [])].map(normalizeOrigin);
+      console.info('[embed] message origin allowlist:', allowedOrigins);
     })
-    .catch(() => {
+    .catch((err) => {
       // Config unreachable — fall back to same-origin only (safe default).
-      allowedOrigins = [location.origin];
+      allowedOrigins = [normalizeOrigin(location.origin)];
+      console.warn('[embed] /api/embed-config unreachable — accepting same-origin only.', err);
     })
     .finally(() => {
       const queued = pendingMessages.splice(0);
       for (const event of queued) {
         if (isAllowedOrigin(event.origin)) handleEmbedMessage(event);
-        else console.warn('[embed] Ignoring queued message from disallowed origin:', event.origin);
+        else console.warn('[embed] Ignoring queued message from disallowed origin:', event.origin, '— allowed:', allowedOrigins);
       }
     });
 }
