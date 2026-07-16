@@ -854,6 +854,16 @@
           <input type="range" id="cropSize" min="50" max="200" step="5" value="100">
           <span class="value" id="cropSizeVal">100%</span>
         </div>
+        <div class="control">
+          <label>Position X</label>
+          <input type="range" id="cropPosX" min="-50" max="50" step="1" value="0">
+          <span class="value" id="cropPosXVal">0</span>
+        </div>
+        <div class="control">
+          <label>Position Y</label>
+          <input type="range" id="cropPosY" min="-50" max="50" step="1" value="0">
+          <span class="value" id="cropPosYVal">0</span>
+        </div>
         <div class="btn-row">
           <button class="btn" id="btnCropReset" style="font-size:11px; padding:4px 10px;">Reset Crop</button>
         </div>
@@ -1205,69 +1215,73 @@ class PixelPortrait {
     const srcCtx = srcCanvas.getContext('2d');
     srcCtx.drawImage(img, 0, 0);
 
-    // 1. Face detection (or use crop override)
+    // 1. Resolve crop geometry (center, size, orientation) in source coords.
+    //    The crop is deferred to the very end — we process the ENTIRE image
+    //    first so the crop never samples out-of-frame pixels destructively.
     let landmarks = null;
-    let bbox = null;
-    let angle = 0;
+    let cx, cy, size;
+    let angle = 0; // upright by default; only a manual rotation tilts the output
 
     if (cropOverride) {
       landmarks = cropOverride.landmarks;
       angle = cropOverride.angle;
-      bbox = {
-        x: cropOverride.cx - cropOverride.size / 2,
-        y: cropOverride.cy - cropOverride.size / 2,
-        w: cropOverride.size,
-        h: cropOverride.size,
-      };
+      cx = cropOverride.cx;
+      cy = cropOverride.cy;
+      size = cropOverride.size;
     } else {
+      let bboxDetect = null;
       if (this.faceLandmarker) {
         const result = this.faceLandmarker.detect(srcCanvas);
         if (result.faceLandmarks && result.faceLandmarks.length > 0) {
           landmarks = result.faceLandmarks[0];
-          bbox = this._getBoundingBox(landmarks, img.width, img.height);
+          bboxDetect = this._getBoundingBox(landmarks, img.width, img.height);
         }
       }
-      if (!bbox) {
+      if (!bboxDetect) {
         throw new Error('No face detected');
       }
-      const eyeL = landmarks[33];
-      const eyeR = landmarks[263];
-      angle = Math.atan2(
-        eyeR.y * img.height - eyeL.y * img.height,
-        eyeR.x * img.width - eyeL.x * img.width
-      );
+      cx = bboxDetect.x + bboxDetect.w / 2;
+      cy = bboxDetect.y + bboxDetect.h / 2;
+      size = Math.max(bboxDetect.w, bboxDetect.h);
     }
 
-    // 2. Crop & align
-    const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = 256;
-    cropCanvas.height = 256;
-    const cropCtx = cropCanvas.getContext('2d');
+    // Axis-aligned crop box in source coords — used by the post-process helpers
+    // (eye highlights, background removal) to map landmarks into the output grid.
+    const bbox = { x: cx - size / 2, y: cy - size / 2, w: size, h: size };
 
-    cropCtx.save();
-    cropCtx.translate(128, 128);
-    cropCtx.rotate(-angle);
-    cropCtx.drawImage(
-      srcCanvas,
-      bbox.x, bbox.y, bbox.w, bbox.h,
-      -128, -128, 256, 256
-    );
-    cropCtx.restore();
+    // 2. Process the ENTIRE image: pixelate the whole frame at the resolution
+    //    where the crop region maps to outputSize pixels, then pre-process it.
+    const f = outputSize / size; // source -> pixel-grid scale
+    const fpW = Math.max(1, Math.round(img.width * f));
+    const fpH = Math.max(1, Math.round(img.height * f));
+    const fullCanvas = document.createElement('canvas');
+    fullCanvas.width = fpW;
+    fullCanvas.height = fpH;
+    const fullCtx = fullCanvas.getContext('2d');
+    fullCtx.imageSmoothingEnabled = true;
+    fullCtx.drawImage(srcCanvas, 0, 0, img.width, img.height, 0, 0, fpW, fpH);
 
-    // 3. Pre-process: blur + contrast + saturation boost
-    let imageData = cropCtx.getImageData(0, 0, 256, 256);
-    imageData = this._gaussianBlur(imageData, 1);
-    imageData = this._adjustContrast(imageData, 1.10);
-    imageData = this._adjustSaturation(imageData, 1.15);
-    cropCtx.putImageData(imageData, 0, 0);
+    // 3. Pre-process the whole frame: blur + contrast + saturation boost
+    let fullData = fullCtx.getImageData(0, 0, fpW, fpH);
+    fullData = this._gaussianBlur(fullData, 1);
+    fullData = this._adjustContrast(fullData, 1.10);
+    fullData = this._adjustSaturation(fullData, 1.15);
+    fullCtx.putImageData(fullData, 0, 0);
 
-    // 4. Downscale to output size
+    // 4. Crop out the region at the very end — upright by default, optionally
+    //    tilted by a manual rotation. Any margin that falls outside the photo
+    //    is filled by clamping edge pixels (no black border artifacts).
     const outCanvas = document.createElement('canvas');
     outCanvas.width = outputSize;
     outCanvas.height = outputSize;
     const outCtx = outCanvas.getContext('2d');
-    outCtx.imageSmoothingEnabled = false;
-    outCtx.drawImage(cropCanvas, 0, 0, outputSize, outputSize);
+    outCtx.imageSmoothingEnabled = true;
+    outCtx.save();
+    outCtx.translate(outputSize / 2, outputSize / 2);
+    if (angle) outCtx.rotate(-angle);
+    outCtx.drawImage(fullCanvas, -cx * f, -cy * f);
+    outCtx.restore();
+    this._clampEdges(outCtx, outputSize);
 
     // 4b. Background removal (optional, before quantization)
     if (removeBg) {
@@ -1655,6 +1669,62 @@ class PixelPortrait {
     imageData.data.set(result);
     return imageData;
   }
+
+  // Fill fully-transparent pixels (crop margins that fell outside the source
+  // photo) by clamping the nearest opaque pixel — avoids black border artifacts.
+  _clampEdges(ctx, n) {
+    const imgData = ctx.getImageData(0, 0, n, n);
+    const d = imgData.data;
+    const copy = (dst, src) => {
+      d[dst * 4] = d[src * 4];
+      d[dst * 4 + 1] = d[src * 4 + 1];
+      d[dst * 4 + 2] = d[src * 4 + 2];
+      d[dst * 4 + 3] = 255;
+    };
+    // Horizontal pass: extend opaque runs left and right within each row.
+    for (let y = 0; y < n; y++) {
+      let last = -1;
+      for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        if (d[i * 4 + 3] > 0) last = i;
+        else if (last >= 0) copy(i, last);
+      }
+      let first = -1;
+      for (let x = 0; x < n; x++) {
+        const i = y * n + x;
+        if (d[i * 4 + 3] > 0) { first = i; break; }
+      }
+      if (first >= 0) {
+        for (let x = 0; x < n; x++) {
+          const i = y * n + x;
+          if (d[i * 4 + 3] === 0) copy(i, first);
+          else break;
+        }
+      }
+    }
+    // Vertical pass: fills any rows that were entirely transparent.
+    for (let x = 0; x < n; x++) {
+      let last = -1;
+      for (let y = 0; y < n; y++) {
+        const i = y * n + x;
+        if (d[i * 4 + 3] > 0) last = i;
+        else if (last >= 0) copy(i, last);
+      }
+      let first = -1;
+      for (let y = 0; y < n; y++) {
+        const i = y * n + x;
+        if (d[i * 4 + 3] > 0) { first = i; break; }
+      }
+      if (first >= 0) {
+        for (let y = 0; y < n; y++) {
+          const i = y * n + x;
+          if (d[i * 4 + 3] === 0) copy(i, first);
+          else break;
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
 }
 
 
@@ -1692,22 +1762,34 @@ let browserResult = null;
 let detectedCrop = null;     // result from portrait.detectFace()
 let cropRotationOffset = 0;  // degrees, user adjustment
 let cropSizeScale = 1.0;     // multiplier, user adjustment
+let cropPosXOffset = 0;      // user adjustment (% of detected crop size)
+let cropPosYOffset = 0;      // user adjustment (% of detected crop size)
 
 const cropControls = document.getElementById('cropControls');
 const cropRotationSlider = document.getElementById('cropRotation');
 const cropRotationVal = document.getElementById('cropRotationVal');
 const cropSizeSlider = document.getElementById('cropSize');
 const cropSizeVal = document.getElementById('cropSizeVal');
+const cropPosXSlider = document.getElementById('cropPosX');
+const cropPosXVal = document.getElementById('cropPosXVal');
+const cropPosYSlider = document.getElementById('cropPosY');
+const cropPosYVal = document.getElementById('cropPosYVal');
 
 function getCropOverride() {
   if (!detectedCrop) return null;
+  // Output is kept in the photo's original (upright) orientation. The detected
+  // eye-level angle is NOT baked into the result — the rotation slider is a
+  // manual tilt control that defaults to 0 (upright).
   const angleOffset = cropRotationOffset * Math.PI / 180;
+  // X/Y offset as a percentage of the detected crop size
+  const offsetX = (cropPosXOffset / 100) * detectedCrop.size;
+  const offsetY = (cropPosYOffset / 100) * detectedCrop.size;
   return {
     landmarks: detectedCrop.landmarks,
-    cx: detectedCrop.cx,
-    cy: detectedCrop.cy,
+    cx: detectedCrop.cx + offsetX,
+    cy: detectedCrop.cy + offsetY,
     size: detectedCrop.size * cropSizeScale,
-    angle: detectedCrop.angle + angleOffset,
+    angle: angleOffset,
   };
 }
 
@@ -1796,13 +1878,33 @@ cropSizeSlider.addEventListener('input', () => {
   scheduleRerun();
 });
 
+cropPosXSlider.addEventListener('input', () => {
+  cropPosXOffset = parseInt(cropPosXSlider.value);
+  cropPosXVal.textContent = cropPosXOffset;
+  drawCropOverlay();
+  scheduleRerun();
+});
+
+cropPosYSlider.addEventListener('input', () => {
+  cropPosYOffset = parseInt(cropPosYSlider.value);
+  cropPosYVal.textContent = cropPosYOffset;
+  drawCropOverlay();
+  scheduleRerun();
+});
+
 document.getElementById('btnCropReset').addEventListener('click', () => {
   cropRotationOffset = 0;
   cropSizeScale = 1.0;
+  cropPosXOffset = 0;
+  cropPosYOffset = 0;
   cropRotationSlider.value = 0;
   cropRotationVal.textContent = '0\u00b0';
   cropSizeSlider.value = 100;
   cropSizeVal.textContent = '100%';
+  cropPosXSlider.value = 0;
+  cropPosXVal.textContent = '0';
+  cropPosYSlider.value = 0;
+  cropPosYVal.textContent = '0';
   drawCropOverlay();
   scheduleRerun();
 });
@@ -2105,10 +2207,16 @@ async function handleFile(file) {
   // Reset crop adjustments for new image
   cropRotationOffset = 0;
   cropSizeScale = 1.0;
+  cropPosXOffset = 0;
+  cropPosYOffset = 0;
   cropRotationSlider.value = 0;
   cropRotationVal.textContent = '0\u00b0';
   cropSizeSlider.value = 100;
   cropSizeVal.textContent = '100%';
+  cropPosXSlider.value = 0;
+  cropPosXVal.textContent = '0';
+  cropPosYSlider.value = 0;
+  cropPosYVal.textContent = '0';
 
   // Detect face and show crop overlay
   detectedCrop = await portrait.detectFace(file);
