@@ -114,6 +114,19 @@ async def palettes():
     return {"palettes": list_palettes()}
 
 
+@app.get("/api/embed-config")
+async def embed_config():
+    """Origins allowed to embed/message the editor in embed mode.
+
+    Reuses the SAME allowlist that gates iframe embedding (CSP frame-ancestors /
+    ALLOWED_FRAME_ANCESTORS) so the embed page can validate inbound postMessage
+    event.origin against it. Normalized identically to the CSP middleware
+    (whitespace-split, empties dropped) so the two never disagree.
+    """
+    origins = settings.allowed_frame_ancestors.split() if settings.allowed_frame_ancestors else []
+    return {"allowedOrigins": origins}
+
+
 @app.post("/api/generate")
 async def generate(
     image: UploadFile = File(...),

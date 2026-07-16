@@ -39,6 +39,24 @@ class TestPalettesEndpoint:
             assert "tags" in p
 
 
+class TestEmbedConfigEndpoint:
+    def test_returns_allowed_origins(self):
+        response = client.get("/api/embed-config")
+        assert response.status_code == 200
+        data = response.json()
+        assert "allowedOrigins" in data
+        assert isinstance(data["allowedOrigins"], list)
+
+    def test_origins_match_frame_ancestors_setting(self):
+        # The embed page validates inbound postMessage origins against this list,
+        # which must be the SAME allowlist that gates iframe embedding.
+        from app.config import settings
+
+        response = client.get("/api/embed-config")
+        expected = settings.allowed_frame_ancestors.split() if settings.allowed_frame_ancestors else []
+        assert response.json()["allowedOrigins"] == expected
+
+
 class TestGenerateEndpoint:
     def _make_test_image(self, width=256, height=256) -> bytes:
         """Create a simple test image."""
