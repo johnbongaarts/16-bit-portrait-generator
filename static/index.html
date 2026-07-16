@@ -2303,6 +2303,81 @@ async function runBrowserPipeline(file) {
   browserSpinner.classList.remove('show');
 }
 
+// Load a finished pixel portrait straight into the editor as the current
+// editing image. Used by embed mode when the CRM hands us the contact's
+// existing portrait — it is ALREADY pixel art, so we skip face detection and
+// the whole generation pipeline and draw it directly.
+async function loadPortraitIntoEditor(dataUrl, { pixelated = true } = {}) {
+  const img = await new Promise((resolve, reject) => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => reject(new Error('Could not decode portrait image'));
+    im.src = dataUrl;
+  });
+
+  // The image's native resolution IS the pixel-art grid. Drive outputSize from
+  // it so the retouch brush / flood-fill / save all map pixels 1:1.
+  const nativeSize = img.naturalWidth || img.width;
+  if (!nativeSize) throw new Error('Portrait image has zero size');
+
+  const outputSel = document.getElementById('outputSize');
+  if (![...outputSel.options].some(o => o.value === String(nativeSize))) {
+    const opt = document.createElement('option');
+    opt.value = String(nativeSize);
+    opt.textContent = `${nativeSize} × ${nativeSize}`;
+    outputSel.appendChild(opt);
+  }
+  outputSel.value = String(nativeSize);
+
+  const scale = getSettings().scale;
+  const displaySize = nativeSize * scale;
+
+  // 1. Rasterize at native pixel-art resolution (1:1, alpha preserved).
+  const rawCanvas = document.createElement('canvas');
+  rawCanvas.width = nativeSize;
+  rawCanvas.height = nativeSize;
+  const rawCtx = rawCanvas.getContext('2d');
+  rawCtx.imageSmoothingEnabled = false;
+  rawCtx.drawImage(img, 0, 0, nativeSize, nativeSize);
+
+  // 2. Upscale into the display canvas. Honor pixelated:true → nearest-neighbor,
+  //    smoothing disabled, so the portrait stays crisp at every zoom.
+  browserCanvas.width = displaySize;
+  browserCanvas.height = displaySize;
+  const ctx = browserCanvas.getContext('2d');
+  ctx.imageSmoothingEnabled = !pixelated;
+  ctx.drawImage(rawCanvas, 0, 0, displaySize, displaySize);
+
+  // 3. Derive a retouch palette from the loaded pixels so the swatches work.
+  const palette = extractPalette(rawCtx.getImageData(0, 0, nativeSize, nativeSize));
+  clearBrush();
+  buildSwatches(document.getElementById('browserSwatches'), palette, 'rgb');
+
+  // 4. Editor state: this loaded image is the new baseline for undo/dirty.
+  //    currentFile stays null (no source photo) so settings changes don't try
+  //    to re-run the generation pipeline against a non-existent file.
+  currentFile = null;
+  detectedCrop = null;
+  cropControls.classList.remove('visible');
+  undoStack.length = 0;
+  redoStack.length = 0;
+  updateHistoryUI();
+
+  browserResult = browserCanvas;
+  browserDot.className = 'dot active';
+  document.getElementById('browserColorCount').textContent = palette.length;
+  document.getElementById('browserTime').textContent = 'Loaded';
+  updateExportSize();
+
+  setRetouchDirty(false);
+  storeAlgorithmSnapshot();
+  updateSaveEnabled();
+  updateFilenamePreview();
+
+  const saveBtn = document.getElementById('btnSavePortrait');
+  if (saveBtn) saveBtn.disabled = false;
+}
+
 // Download (current scale)
 btnDownload.addEventListener('click', () => {
   if (browserResult) {
@@ -2497,6 +2572,22 @@ function buildSwatches(container, palette, source) {
 function hexToRgb(hex) {
   const h = hex.replace('#', '');
   return [parseInt(h.substring(0,2), 16), parseInt(h.substring(2,4), 16), parseInt(h.substring(4,6), 16)];
+}
+
+// Collect the distinct opaque colors from image data — used to build the
+// retouch palette for a portrait loaded from outside the generation pipeline.
+function extractPalette(imageData, maxColors = 64) {
+  const seen = new Map();
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue; // skip fully-transparent pixels
+    const key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+    if (!seen.has(key)) {
+      seen.set(key, [d[i], d[i + 1], d[i + 2]]);
+      if (seen.size >= maxColors) break;
+    }
+  }
+  return [...seen.values()];
 }
 
 
@@ -2856,15 +2947,93 @@ if (isEmbedMode) {
   });
   observer.observe(browserDot, { attributes: true, attributeFilter: ['class'] });
 
-  // Listen for init messages from parent
-  window.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'portrait-init') {
-      // Parent can send context (e.g., contact name for title)
-      if (e.data.contactName) {
-        document.title = `Portrait: ${e.data.contactName}`;
+  // ----------------------------------------------------------
+  // Inbound messages from the CRM (portrait-init / portrait-load)
+  // ----------------------------------------------------------
+  //
+  // The CRM posts to iframe.contentWindow right after the iframe's load event,
+  // with NO ready handshake — so the message listener MUST be live before then.
+  // It is registered synchronously below, during initial module execution,
+  // which completes before window 'load' fires.
+  //
+  // Origin trust reuses the SAME allowlist that gates iframe embedding
+  // (ALLOWED_FRAME_ANCESTORS / CSP frame-ancestors), fetched from the server.
+  // 'self' (location.origin) is always allowed so the editor can be driven
+  // same-origin (e.g. devtools). The allowlist loads asynchronously; any
+  // message that arrives before it is queued and replayed once it is known,
+  // so nothing is lost to the race.
+
+  let allowedOrigins = null;          // null = allowlist not loaded yet
+  const pendingMessages = [];
+
+  function isAllowedOrigin(origin) {
+    return Array.isArray(allowedOrigins) && allowedOrigins.includes(origin);
+  }
+
+  function handleEmbedMessage(event) {
+    const data = event.data;
+    if (data.type === 'portrait-init') {
+      if (data.contactName) {
+        document.title = `Portrait: ${data.contactName}`;
+        // Light touch: seed the file-organizer root name if the user hasn't set one.
+        const rootEl = document.getElementById('foRootName');
+        if (rootEl && !rootEl.value.trim()) {
+          rootEl.value = data.contactName.trim().replace(/[\/\\:*?"<>|]/g, '_') + '_portrait';
+          updateFilenamePreview();
+        }
+      }
+      // Best-effort readiness ping so a FUTURE CRM revision could gate its posts
+      // on it. The current CRM does not wait for this — do not depend on it.
+      try {
+        (event.source || window.parent).postMessage({ type: 'portrait-ready' }, event.origin);
+      } catch (_) { /* ignore — reply is best-effort */ }
+    } else if (data.type === 'portrait-load') {
+      if (typeof data.data === 'string' && /^data:image\//.test(data.data)) {
+        // pixelated defaults to true unless explicitly false.
+        loadPortraitIntoEditor(data.data, { pixelated: data.pixelated !== false })
+          .catch(err => console.error('[embed] Failed to load portrait:', err));
+      } else {
+        console.warn('[embed] portrait-load ignored: missing/invalid image data URL');
       }
     }
-  });
+  }
+
+  function onEmbedMessage(event) {
+    const data = event.data;
+    if (!data || typeof data !== 'object') return;
+    if (data.type !== 'portrait-init' && data.type !== 'portrait-load') return;
+
+    if (allowedOrigins === null) {
+      pendingMessages.push(event);   // allowlist not ready — replay later
+      return;
+    }
+    if (!isAllowedOrigin(event.origin)) {
+      console.warn('[embed] Ignoring message from disallowed origin:', event.origin);
+      return;
+    }
+    handleEmbedMessage(event);
+  }
+
+  // Register FIRST, synchronously — before any await / network work.
+  window.addEventListener('message', onEmbedMessage);
+
+  // Load the origin allowlist, then drain anything that arrived early.
+  fetch('/api/embed-config')
+    .then(r => r.json())
+    .then(cfg => {
+      allowedOrigins = [location.origin, ...(cfg.allowedOrigins || [])];
+    })
+    .catch(() => {
+      // Config unreachable — fall back to same-origin only (safe default).
+      allowedOrigins = [location.origin];
+    })
+    .finally(() => {
+      const queued = pendingMessages.splice(0);
+      for (const event of queued) {
+        if (isAllowedOrigin(event.origin)) handleEmbedMessage(event);
+        else console.warn('[embed] Ignoring queued message from disallowed origin:', event.origin);
+      }
+    });
 }
 
 
