@@ -57,6 +57,20 @@ class TestEmbedConfigEndpoint:
         assert response.json()["allowedOrigins"] == expected
 
 
+class TestHtmlCacheHeaders:
+    def test_html_sends_no_cache(self):
+        # The embed HTML must always revalidate, else browsers serve a stale
+        # index.html (and stale embed JS) for hours after a deploy.
+        response = client.get("/")
+        assert response.status_code == 200
+        assert "text/html" in response.headers.get("content-type", "")
+        assert response.headers.get("cache-control") == "no-cache"
+
+    def test_json_not_forced_no_cache(self):
+        response = client.get("/api/health")
+        assert response.headers.get("cache-control") != "no-cache"
+
+
 class TestGenerateEndpoint:
     def _make_test_image(self, width=256, height=256) -> bytes:
         """Create a simple test image."""
