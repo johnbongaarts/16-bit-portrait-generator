@@ -90,6 +90,22 @@ if settings.allowed_frame_ancestors:
         response.headers["X-Frame-Options"] = f"ALLOW-FROM {ancestors.split()[0]}"
         return response
 
+
+# Always revalidate HTML so browsers (and the CRM iframe) pick up new deploys
+# immediately. StaticFiles serves index.html with only Last-Modified/ETag and no
+# Cache-Control, which triggers heuristic caching — a browser can then treat a
+# cached copy as "fresh" for hours and never fetch the new embed code (symptom:
+# the iframe runs a stale index.html long after a deploy). "no-cache" still lets
+# the ETag produce a cheap 304 when nothing changed; it just forbids using the
+# cache without revalidating first.
+@app.middleware("http")
+async def html_revalidate_headers(request, call_next):
+    response = await call_next(request)
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 # Concurrency control
 _semaphore = asyncio.Semaphore(settings.max_concurrent_requests)
 
